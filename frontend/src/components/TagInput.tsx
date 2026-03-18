@@ -30,13 +30,17 @@ export function TagInput({ selectedTagIds, allTags, onAdd, onRemove, onCreateTag
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' && input.trim()) {
       e.preventDefault();
-      const existing = allTags.find((t) => t.name === input.trim());
-      if (existing) {
-        handleSelect(existing);
-      } else if (onCreateTag) {
-        const created = await onCreateTag(input.trim());
+      const trimmed = input.trim();
+      const exact = allTags.find((t) => t.name === trimmed);
+      if (exact && !selectedTagIds.includes(exact.id)) {
+        handleSelect(exact);
+      } else if (!exact && suggestions.length === 1) {
+        handleSelect(suggestions[0]);
+      } else if (!exact && onCreateTag) {
+        const created = await onCreateTag(trimmed);
         onAdd(created.id);
         setInput('');
         setShowSuggestions(false);

@@ -1,0 +1,12 @@
+RewriteEngine On
+RewriteBase /contents/sm/
+
+# API リクエストはそのまま通す（PHP が処理）
+RewriteRule ^api/ - [L]
+
+# 実ファイル・ディレクトリはそのまま
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# SPA フォールバック: すべて index.html へ
+RewriteRule ^ index.html [L]

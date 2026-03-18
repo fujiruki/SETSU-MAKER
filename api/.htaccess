@@ -1,3 +1,5 @@
-RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^ index.php [QSA,L]
+# data/ ディレクトリへの直接アクセスを禁止（note.json 等を保護）
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^data/ - [F,L]
+</IfModule>
