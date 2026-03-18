@@ -32,7 +32,12 @@ export function DashboardView() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-        <h1 className="text-xl font-bold text-gray-800 tracking-tight">SETSU-MAKER</h1>
+        <Link to="/app" className="text-xl font-bold text-gray-800 tracking-tight hover:text-blue-600 transition-colors">
+          SETSU-MAKER
+        </Link>
+        <Link to="/" className="text-xs text-gray-400 hover:text-blue-500 transition-colors border border-gray-200 rounded px-2 py-0.5">
+          このアプリについて
+        </Link>
         <div className="flex-1 relative max-w-md ml-4">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
