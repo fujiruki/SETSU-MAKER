@@ -176,22 +176,22 @@ export function StepCard({
 }
 
 function PhotoThumbnail({ photo, onClick }: { photo: Photo; onClick: () => void }) {
-  const [naturalW, setNaturalW] = useState(0);
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const handleLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    setNaturalW(e.currentTarget.naturalWidth);
+    setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight });
   }, []);
 
   const crop = photo.cropRegion;
 
-  if (crop && naturalW > 0) {
-    const imgWidthPct = (naturalW / crop.width) * 100;
-    const leftPct = -(crop.x / crop.width) * 100;
-    const topPct = -(crop.y / crop.height) * 100;
+  const btnCls = "block w-full rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 touch-manipulation active:opacity-80";
+
+  if (crop && naturalSize) {
+    // クロップ領域のアスペクト比でコンテナを確保し、画像をオフセット表示
+    const imgWidthPct = (naturalSize.w / crop.width) * 100;
+    const leftPct     = -(crop.x / crop.width) * 100;
+    const topPct      = -(crop.y / crop.height) * 100;
     return (
-      <button
-        onClick={onClick}
-        className="block w-full rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 touch-manipulation active:opacity-80"
-      >
+      <button onClick={onClick} className={btnCls}>
         <div style={{ position: 'relative', width: '100%', aspectRatio: `${crop.width}/${crop.height}`, overflow: 'hidden' }}>
           <img
             src={photo.url}
@@ -204,16 +204,13 @@ function PhotoThumbnail({ photo, onClick }: { photo: Photo; onClick: () => void 
     );
   }
 
+  // クロップなし or 読み込み前: 元画像の比率通りに表示
   return (
-    <button
-      onClick={onClick}
-      className="block w-full rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 touch-manipulation active:opacity-80"
-    >
+    <button onClick={onClick} className={btnCls}>
       <img
         src={photo.url}
         alt=""
-        className="block w-full"
-        style={{ height: '200px', objectFit: 'cover' }}
+        className="block w-full h-auto"
         onLoad={handleLoad}
       />
     </button>
