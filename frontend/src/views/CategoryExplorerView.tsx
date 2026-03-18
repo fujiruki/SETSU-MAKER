@@ -55,7 +55,7 @@ export function CategoryExplorerView() {
     : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
         <Link to="/" className="text-xl font-bold text-gray-800 tracking-tight">
           SETSU-MAKER

@@ -30,7 +30,7 @@ export function DashboardView() {
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
         <h1 className="text-xl font-bold text-gray-800 tracking-tight">SETSU-MAKER</h1>
         <div className="flex-1 relative max-w-md ml-4">
