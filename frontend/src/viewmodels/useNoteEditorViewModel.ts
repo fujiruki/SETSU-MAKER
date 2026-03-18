@@ -156,6 +156,11 @@ export function useNoteEditorViewModel(initialNote: Note) {
 
   const resetDirty = useCallback(() => setIsDirty(false), []);
 
+  const revert = useCallback(() => {
+    setDraft(initialNote);
+    setIsDirty(false);
+  }, [initialNote]);
+
   return {
     draft,
     isDirty,
@@ -171,5 +176,6 @@ export function useNoteEditorViewModel(initialNote: Note) {
     updateHighlight,
     removeHighlight,
     resetDirty,
+    revert,
   };
 }

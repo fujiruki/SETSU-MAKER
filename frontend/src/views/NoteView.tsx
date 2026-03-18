@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ChevronRight, Edit2, BookOpen, Star, ArrowLeft } from 'lucide-react';
 import { StepCard } from '../components/StepCard';
 import type { Note, Photo } from '../models/types';
@@ -38,6 +38,7 @@ type ViewMode = 'view' | 'edit' | 'hint';
 
 export function NoteView() {
   const { noteId } = useParams();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<ViewMode>('view');
   const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
   const note = MOCK_NOTE;
@@ -70,17 +71,13 @@ export function NoteView() {
               <BookOpen size={15} />
               ヒント
             </button>
-            <Link
-              to={`/notes/${noteId}/edit`}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border touch-manipulation ${
-                mode === 'edit'
-                  ? 'bg-blue-50 border-blue-300 text-blue-700'
-                  : 'border-gray-200 hover:bg-gray-50 text-gray-600'
-              }`}
+            <button
+              onClick={() => navigate(`/notes/${noteId}/edit`, { state: { note } })}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border touch-manipulation border-gray-200 hover:bg-gray-50 text-gray-600"
             >
               <Edit2 size={15} />
               編集
-            </Link>
+            </button>
           </div>
         </div>
       </header>

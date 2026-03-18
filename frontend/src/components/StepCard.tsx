@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { GripVertical, Trash2, Plus, Camera } from 'lucide-react';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import { GripVertical, Trash2, Plus, Camera, Upload, Clipboard } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { HighlightBlock, AddHighlightButton } from './HighlightBlock';
@@ -36,6 +36,8 @@ export function StepCard({
     useSortable({ id: step.id });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [showPhotoMenu, setShowPhotoMenu] = useState(false);
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -96,19 +98,27 @@ export function StepCard({
           )}
 
           {editable && (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-400 hover:border-blue-400 hover:text-blue-500 w-full justify-center touch-manipulation"
-            >
-              <Camera size={16} />
-              写真を追加
-            </button>
+            <PhotoAddMenu
+              onAddPhotos={onAddPhotos}
+              showMenu={showPhotoMenu}
+              setShowMenu={setShowPhotoMenu}
+              fileInputRef={fileInputRef}
+              cameraInputRef={cameraInputRef}
+            />
           )}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
             multiple
+            className="hidden"
+            onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
             className="hidden"
             onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
           />
@@ -166,15 +176,33 @@ export function StepCard({
 }
 
 function PhotoThumbnail({ photo, onClick }: { photo: Photo; onClick: () => void }) {
-  const cropStyle = photo.cropRegion
-    ? {
-        objectFit: 'none' as const,
-        objectPosition: `-${photo.cropRegion.x}px -${photo.cropRegion.y}px`,
-        width: `${photo.cropRegion.width}px`,
-        height: `${photo.cropRegion.height}px`,
-        maxWidth: '100%',
-      }
-    : { objectFit: 'cover' as const, width: '100%', height: '200px' };
+  const [naturalW, setNaturalW] = useState(0);
+  const handleLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    setNaturalW(e.currentTarget.naturalWidth);
+  }, []);
+
+  const crop = photo.cropRegion;
+
+  if (crop && naturalW > 0) {
+    const imgWidthPct = (naturalW / crop.width) * 100;
+    const leftPct = -(crop.x / crop.width) * 100;
+    const topPct = -(crop.y / crop.height) * 100;
+    return (
+      <button
+        onClick={onClick}
+        className="block w-full rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 touch-manipulation active:opacity-80"
+      >
+        <div style={{ position: 'relative', width: '100%', aspectRatio: `${crop.width}/${crop.height}`, overflow: 'hidden' }}>
+          <img
+            src={photo.url}
+            alt=""
+            style={{ position: 'absolute', width: `${imgWidthPct}%`, left: `${leftPct}%`, top: `${topPct}%` }}
+            onLoad={handleLoad}
+          />
+        </div>
+      </button>
+    );
+  }
 
   return (
     <button
@@ -184,10 +212,93 @@ function PhotoThumbnail({ photo, onClick }: { photo: Photo; onClick: () => void 
       <img
         src={photo.url}
         alt=""
-        className="block"
-        style={cropStyle}
+        className="block w-full"
+        style={{ height: '200px', objectFit: 'cover' }}
+        onLoad={handleLoad}
       />
     </button>
+  );
+}
+
+interface PhotoAddMenuProps {
+  onAddPhotos: (files: FileList) => void;
+  showMenu: boolean;
+  setShowMenu: (v: boolean) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  cameraInputRef: React.RefObject<HTMLInputElement | null>;
+}
+
+function PhotoAddMenu({ onAddPhotos, showMenu, setShowMenu, fileInputRef, cameraInputRef }: PhotoAddMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMenu, setShowMenu]);
+
+  const handleClipboard = async () => {
+    setShowMenu(false);
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const file = new File([blob], `clipboard.${imageType.split('/')[1]}`, { type: imageType });
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          onAddPhotos(dt.files);
+          return;
+        }
+      }
+      alert('クリップボードに画像がありません');
+    } catch {
+      alert('クリップボードへのアクセスが許可されていません');
+    }
+  };
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-400 hover:border-blue-400 hover:text-blue-500 w-full justify-center touch-manipulation"
+      >
+        <Camera size={16} />
+        写真を追加
+      </button>
+
+      {showMenu && (
+        <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+          <button
+            onClick={() => { setShowMenu(false); cameraInputRef.current?.click(); }}
+            className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 touch-manipulation border-b border-gray-100"
+          >
+            <Camera size={16} className="text-gray-400 shrink-0" />
+            写真を撮る
+          </button>
+          <button
+            onClick={() => { setShowMenu(false); fileInputRef.current?.click(); }}
+            className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 touch-manipulation border-b border-gray-100"
+          >
+            <Upload size={16} className="text-gray-400 shrink-0" />
+            アップロード
+          </button>
+          <button
+            onClick={handleClipboard}
+            className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 touch-manipulation"
+          >
+            <Clipboard size={16} className="text-gray-400 shrink-0" />
+            クリップボードから追加
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

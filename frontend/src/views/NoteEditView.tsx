@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   DndContext,
   closestCenter,
@@ -12,7 +12,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ChevronRight, Save, Plus, Upload, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Save, Plus, Upload, ArrowLeft, RotateCcw, Eye } from 'lucide-react';
 import { ImageEditorLightbox } from '@fujiruki/react-image-editor-lightbox';
 import type { ImageEditorSaveResult } from '@fujiruki/react-image-editor-lightbox';
 import { StepCard, StepInsertButton } from '../components/StepCard';
@@ -46,9 +46,14 @@ const MOCK_BREADCRUMB = [
 
 export function NoteEditView() {
   const { noteId } = useParams();
-  const vm = useNoteEditorViewModel(MOCK_NOTE);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const initialNote: Note = (location.state as { note?: Note } | null)?.note ?? MOCK_NOTE;
+  const vm = useNoteEditorViewModel(initialNote);
   const [allTags] = useState<Tag[]>(MOCK_TAGS);
   const [isSaving, setIsSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [showRevertConfirm, setShowRevertConfirm] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<{ photo: Photo; stepId: string } | null>(null);
   const bulkUploadRef = useRef<HTMLInputElement>(null);
 
@@ -68,6 +73,9 @@ export function NoteEditView() {
     await new Promise((r) => setTimeout(r, 500));
     vm.resetDirty();
     setIsSaving(false);
+    const hhmm = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    setSavedMessage(`保存しました ${hhmm}`);
+    setTimeout(() => setSavedMessage(null), 4000);
   };
 
   const handleAddPhotos = (stepId: string, files: FileList) => {
@@ -133,6 +141,18 @@ export function NoteEditView() {
               className="hidden"
               onChange={(e) => e.target.files && handleBulkUpload(e.target.files)}
             />
+            {vm.isDirty && (
+              <button
+                onClick={() => setShowRevertConfirm(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 touch-manipulation"
+              >
+                <RotateCcw size={15} />
+                編集前に戻す
+              </button>
+            )}
+            {savedMessage && (
+              <span className="text-xs text-green-600 whitespace-nowrap">{savedMessage}</span>
+            )}
             <button
               onClick={handleSave}
               disabled={isSaving || !vm.isDirty}
@@ -141,9 +161,44 @@ export function NoteEditView() {
               <Save size={15} />
               {isSaving ? '保存中...' : '保存'}
             </button>
+            <button
+              onClick={() => navigate(`/notes/${noteId}`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 touch-manipulation"
+            >
+              <Eye size={15} />
+              閲覧モードに戻る
+            </button>
           </div>
         </div>
       </header>
+
+      {showRevertConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-base font-semibold text-gray-800 mb-2">編集前に戻しますか？</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              加えたすべての変更が破棄されます。この操作は取り消せません。
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowRevertConfirm(false)}
+                className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 touch-manipulation"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => {
+                  vm.revert();
+                  setShowRevertConfirm(false);
+                }}
+                className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 touch-manipulation font-medium"
+              >
+                元に戻す
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-3xl mx-auto w-full px-4 py-4 flex-1">
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 space-y-3">
