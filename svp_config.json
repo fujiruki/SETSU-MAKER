@@ -1,0 +1,22 @@
+{
+  "project": "SETSU-MAKER",
+  "appId": "sm",
+  "services": [
+    {
+      "name": "frontend",
+      "type": "vite",
+      "cwd": "frontend",
+      "command": "npm run dev",
+      "port": 5179,
+      "healthCheck": "http://localhost:5179/contents/sm/"
+    },
+    {
+      "name": "api",
+      "type": "php",
+      "cwd": "api",
+      "command": "php -S localhost:8004 -t .",
+      "port": 8004,
+      "healthCheck": "http://localhost:8004/api/health"
+    }
+  ]
+}
