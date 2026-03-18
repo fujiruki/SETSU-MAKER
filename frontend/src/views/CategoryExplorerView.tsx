@@ -57,7 +57,7 @@ export function CategoryExplorerView() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-        <Link to="/" className="text-xl font-bold text-gray-800 tracking-tight">
+        <Link to="/app" className="text-xl font-bold text-gray-800 tracking-tight">
           SETSU-MAKER
         </Link>
         <ChevronRight size={16} className="text-gray-400" />

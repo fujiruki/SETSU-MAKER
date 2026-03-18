@@ -53,7 +53,7 @@ export function DashboardView() {
 
       <div className="flex flex-1 overflow-hidden">
         <nav className="w-56 bg-white border-r border-gray-200 flex flex-col py-2 shrink-0">
-          <NavItem to="/" icon={<Clock size={16} />} label="最近のノート" active />
+          <NavItem to="/app" icon={<Clock size={16} />} label="最近のノート" active />
           <NavItem to="/favorites" icon={<Star size={16} />} label="お気に入り" />
           <NavItem to="/categories" icon={<FolderOpen size={16} />} label="カテゴリ" />
           <NavItem to="/tags" icon={<Tag size={16} />} label="タグ" />

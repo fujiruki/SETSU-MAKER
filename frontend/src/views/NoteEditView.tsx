@@ -111,7 +111,7 @@ export function NoteEditView() {
     <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center gap-2 px-4 py-2">
-          <Link to={noteId ? `/notes/${noteId}` : '/'} className="text-gray-400 hover:text-gray-600 touch-manipulation p-1">
+          <Link to={noteId ? `/notes/${noteId}` : '/app'} className="text-gray-400 hover:text-gray-600 touch-manipulation p-1">
             <ArrowLeft size={20} />
           </Link>
           <nav className="flex items-center gap-1 text-sm text-gray-500 flex-1 min-w-0">
