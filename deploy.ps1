@@ -27,9 +27,13 @@ $deployTmp = "deploy_tmp"
 if (Test-Path $deployTmp) { Remove-Item $deployTmp -Recurse -Force }
 New-Item -ItemType Directory -Path $deployTmp | Out-Null
 
-# API ファイル（database.sqlite と uploads/ は除外 — サーバー上のデータを守る）
-Copy-Item -Path "api\*" -Destination "$deployTmp\api" -Recurse -Force `
-    -Exclude "database.sqlite", "uploads", "data"
+# API ファイルをコピーしてからデータ系を除外（サーバー上のデータを守る）
+New-Item -ItemType Directory -Path "$deployTmp\api" | Out-Null
+Copy-Item -Path "api\*" -Destination "$deployTmp\api" -Recurse -Force
+foreach ($exclude in @("database.sqlite", "uploads", "data")) {
+    $p = "$deployTmp\api\$exclude"
+    if (Test-Path $p) { Remove-Item $p -Recurse -Force }
+}
 
 # フロントエンドビルド成果物
 Get-ChildItem "frontend\dist" | Copy-Item -Destination $deployTmp -Recurse -Force
