@@ -13,6 +13,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { ChevronRight, Save, Plus, Upload, ArrowLeft } from 'lucide-react';
+import { ImageEditorLightbox } from '@fujiruki/react-image-editor-lightbox';
+import type { ImageEditorSaveResult } from '@fujiruki/react-image-editor-lightbox';
 import { StepCard, StepInsertButton } from '../components/StepCard';
 import { TagInput } from '../components/TagInput';
 import { useNoteEditorViewModel } from '../viewmodels/useNoteEditorViewModel';
@@ -47,7 +49,7 @@ export function NoteEditView() {
   const vm = useNoteEditorViewModel(MOCK_NOTE);
   const [allTags] = useState<Tag[]>(MOCK_TAGS);
   const [isSaving, setIsSaving] = useState(false);
-  const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ photo: Photo; stepId: string } | null>(null);
   const bulkUploadRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
@@ -194,7 +196,7 @@ export function NoteEditView() {
                     onUpdateHighlight={(hid, content) => vm.updateHighlight(step.id, hid, content)}
                     onRemoveHighlight={(hid) => vm.removeHighlight(step.id, hid)}
                     onAddPhotos={(files) => handleAddPhotos(step.id, files)}
-                    onPhotoClick={setLightboxPhoto}
+                    onPhotoClick={(photo) => setLightboxPhoto({ photo, stepId: step.id })}
                   />
                   <StepInsertButton onInsert={() => vm.insertStep(i)} />
                 </div>
@@ -214,20 +216,28 @@ export function NoteEditView() {
         </div>
       </div>
 
-      {lightboxPhoto && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-4 max-w-2xl w-full">
-            <p className="text-sm text-gray-500 mb-2">ライトボックス（矢印・トリミング機能は実装予定）</p>
-            <img src={lightboxPhoto.url} alt="" className="w-full rounded-lg" />
-            <button
-              onClick={() => setLightboxPhoto(null)}
-              className="mt-3 w-full py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
-            >
-              閉じる
-            </button>
-          </div>
-        </div>
-      )}
+      <ImageEditorLightbox
+        isOpen={!!lightboxPhoto}
+        imageUrl={lightboxPhoto?.photo.url ?? null}
+        initialCropRegion={lightboxPhoto?.photo.cropRegion ?? null}
+        onSave={async (result: ImageEditorSaveResult) => {
+          if (!lightboxPhoto) return;
+          const { photo, stepId } = lightboxPhoto;
+          const newUrl = URL.createObjectURL(result.annotatedBlob);
+          const step = vm.draft.steps.find((s) => s.id === stepId);
+          if (step) {
+            const updatedPhotos = step.photos.map((p) =>
+              p.id === photo.id
+                ? { ...p, url: newUrl, cropRegion: result.cropRegion }
+                : p
+            );
+            vm.updateStep(stepId, { photos: updatedPhotos });
+          }
+          setLightboxPhoto(null);
+        }}
+        onClose={() => setLightboxPhoto(null)}
+        zIndex={60}
+      />
     </div>
   );
 }
