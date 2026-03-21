@@ -58,6 +58,7 @@ export interface Note {
   categoryId: string;
   tagIds: string[];
   steps: Step[];
+  unassignedPhotos: Photo[];
   eyecatchPhotoId: string | null;
   handwritingData: string | null;
   isFavorite: boolean;

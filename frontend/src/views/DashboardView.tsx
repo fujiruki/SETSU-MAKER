@@ -1,36 +1,36 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, Star, Clock, FolderOpen, Tag, FileText } from 'lucide-react';
-import type { NoteListItem } from '../models/types';
-
-const MOCK_RECENT: NoteListItem[] = [
-  {
-    id: 'n1',
-    title: '引き戸の建て込み手順',
-    categoryId: 'cat-2',
-    tagIds: [],
-    eyecatchUrl: null,
-    isFavorite: true,
-    createdAt: '2026-03-10T00:00:00Z',
-    updatedAt: '2026-03-15T00:00:00Z',
-  },
-  {
-    id: 'n2',
-    title: '框の組み立て',
-    categoryId: 'cat-1',
-    tagIds: [],
-    eyecatchUrl: null,
-    isFavorite: false,
-    createdAt: '2026-03-05T00:00:00Z',
-    updatedAt: '2026-03-12T00:00:00Z',
-  },
-];
+import type { NoteListItem, Tag as TagType } from '../models/types';
+import { noteRepo, tagRepo } from '../repositories/ApiNoteRepository';
+import { useDashboardViewModel } from '../viewmodels/useDashboardViewModel';
 
 export function DashboardView() {
+  const { pathname } = useLocation();
+  const { activeSection, activeNavItem } = useDashboardViewModel(pathname);
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [recentNotes, setRecentNotes] = useState<NoteListItem[]>([]);
+  const [favoriteNotes, setFavoriteNotes] = useState<NoteListItem[]>([]);
+  const [allNotes, setAllNotes] = useState<NoteListItem[]>([]);
+  const [tags, setTags] = useState<TagType[]>([]);
+
+  useEffect(() => {
+    noteRepo.getRecent(20).then(setRecentNotes).catch(console.error);
+    noteRepo.getFavorites().then(setFavoriteNotes).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (activeSection === 'all') {
+      noteRepo.getList().then(setAllNotes).catch(console.error);
+    }
+    if (activeSection === 'tags') {
+      tagRepo.getAll().then(setTags).catch(console.error);
+    }
+  }, [activeSection]);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
         <Link to="/app" className="text-xl font-bold text-gray-800 tracking-tight hover:text-blue-600 transition-colors">
           SETSU-MAKER
@@ -57,39 +57,96 @@ export function DashboardView() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <nav className="w-56 bg-white border-r border-gray-200 flex flex-col py-2 shrink-0">
-          <NavItem to="/app" icon={<Clock size={16} />} label="最近のノート" active />
-          <NavItem to="/favorites" icon={<Star size={16} />} label="お気に入り" />
-          <NavItem to="/categories" icon={<FolderOpen size={16} />} label="カテゴリ" />
-          <NavItem to="/tags" icon={<Tag size={16} />} label="タグ" />
-          <NavItem to="/notes" icon={<FileText size={16} />} label="すべてのノート" />
+        <nav className="hidden md:flex w-56 bg-white border-r border-gray-200 flex-col py-2 shrink-0">
+          <NavItem to="/app"       icon={<Clock size={16} />}     label="最近のノート"  active={activeNavItem === '/app'} />
+          <NavItem to="/favorites" icon={<Star size={16} />}      label="お気に入り"    active={activeNavItem === '/favorites'} />
+          <NavItem to="/categories" icon={<FolderOpen size={16} />} label="カテゴリ"   active={false} />
+          <NavItem to="/tags"      icon={<Tag size={16} />}       label="タグ"         active={activeNavItem === '/tags'} />
+          <NavItem to="/notes"     icon={<FileText size={16} />}  label="すべてのノート" active={activeNavItem === '/notes'} />
         </nav>
 
-        <main className="flex-1 overflow-y-auto p-6">
-          <section className="mb-8">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              最近のノート
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {MOCK_RECENT.map((note) => (
-                <NoteCard key={note.id} note={note} />
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              お気に入り
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {MOCK_RECENT.filter((n) => n.isFavorite).map((note) => (
-                <NoteCard key={note.id} note={note} />
-              ))}
-            </div>
-          </section>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 md:pb-6">
+          {activeSection === 'recent' && (
+            <section>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">最近のノート</h2>
+              <NoteGrid notes={recentNotes} />
+            </section>
+          )}
+          {activeSection === 'favorites' && (
+            <section>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">お気に入り</h2>
+              <NoteGrid notes={favoriteNotes} />
+            </section>
+          )}
+          {activeSection === 'all' && (
+            <section>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">すべてのノート</h2>
+              <NoteGrid notes={allNotes} />
+            </section>
+          )}
+          {activeSection === 'tags' && (
+            <section>
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">タグ</h2>
+              {tags.length === 0 ? (
+                <p className="text-sm text-gray-400">タグがありません</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                    <span key={tag.id} className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </main>
       </div>
+
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <BottomNavItem to="/app"       icon={<Clock size={20} />}    label="最近"      active={activeNavItem === '/app'} />
+        <BottomNavItem to="/favorites" icon={<Star size={20} />}     label="お気に入り" active={activeNavItem === '/favorites'} />
+        <BottomNavItem to="/categories" icon={<FolderOpen size={20} />} label="カテゴリ" active={false} />
+        <BottomNavItem to="/notes"     icon={<FileText size={20} />} label="すべて"    active={activeNavItem === '/notes'} />
+      </nav>
     </div>
+  );
+}
+
+function NoteGrid({ notes }: { notes: NoteListItem[] }) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      {notes.length === 0 && (
+        <p className="text-sm text-gray-400 col-span-full">ノートがありません</p>
+      )}
+      {notes.map((note) => (
+        <NoteCard key={note.id} note={note} />
+      ))}
+    </div>
+  );
+}
+
+function BottomNavItem({
+  to,
+  icon,
+  label,
+  active,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-xs touch-manipulation ${
+        active ? 'text-blue-600' : 'text-gray-500'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </Link>
   );
 }
 

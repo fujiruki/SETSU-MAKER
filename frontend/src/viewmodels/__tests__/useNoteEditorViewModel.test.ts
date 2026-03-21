@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useNoteEditorViewModel } from '../useNoteEditorViewModel';
-import type { Note, Step } from '../../models/types';
+import type { Note, Step, Photo } from '../../models/types';
 
 const makeNote = (overrides: Partial<Note> = {}): Note => ({
   id: 'note-1',
@@ -9,6 +9,7 @@ const makeNote = (overrides: Partial<Note> = {}): Note => ({
   categoryId: 'cat-1',
   tagIds: [],
   steps: [],
+  unassignedPhotos: [],
   eyecatchPhotoId: null,
   handwritingData: null,
   isFavorite: false,
@@ -124,6 +125,29 @@ describe('useNoteEditorViewModel', () => {
     });
   });
 
+  describe('カテゴリ変更', () => {
+    it('setCategoryIdでdraft.categoryIdが更新されisDirtyがtrueになる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ categoryId: 'cat-1' })));
+      act(() => result.current.setCategoryId('cat-2'));
+      expect(result.current.draft.categoryId).toBe('cat-2');
+      expect(result.current.isDirty).toBe(true);
+    });
+  });
+
+  describe('reset', () => {
+    it('resetでdraftが引数のノートに置き換わりisDirtyがfalseになる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ title: '元' })));
+      act(() => result.current.setTitle('変更後'));
+      expect(result.current.isDirty).toBe(true);
+
+      const serverNote = makeNote({ title: 'サーバー値', categoryId: 'cat-99', updatedAt: '2026-03-20T00:00:00Z' });
+      act(() => result.current.reset(serverNote));
+      expect(result.current.draft.title).toBe('サーバー値');
+      expect(result.current.draft.categoryId).toBe('cat-99');
+      expect(result.current.isDirty).toBe(false);
+    });
+  });
+
   describe('ハイライトブロック', () => {
     it('工程にハイライトを追加できる', () => {
       const { result } = renderHook(() =>
@@ -144,6 +168,224 @@ describe('useNoteEditorViewModel', () => {
       );
       act(() => result.current.removeHighlight('step-1', 'h-1'));
       expect(result.current.draft.steps[0].highlights.length).toBe(0);
+    });
+  });
+
+  describe('写真削除', () => {
+    const makePhoto = (overrides: Partial<Photo> = {}): Photo => ({
+      id: 'photo-1',
+      url: 'http://example.com/photo.jpg',
+      annotations: [],
+      cropRegion: null,
+      takenAt: null,
+      createdAt: '2026-01-01T00:00:00Z',
+      order: 0,
+      ...overrides,
+    });
+
+    it('指定した写真が削除される', () => {
+      const step = makeStep({
+        id: 'step-1',
+        photos: [makePhoto({ id: 'p1' }), makePhoto({ id: 'p2', order: 1 })],
+      });
+      const { result } = renderHook(() =>
+        useNoteEditorViewModel(makeNote({ steps: [step] }))
+      );
+      act(() => result.current.removePhoto('step-1', 'p1'));
+      expect(result.current.draft.steps[0].photos.length).toBe(1);
+      expect(result.current.draft.steps[0].photos[0].id).toBe('p2');
+    });
+
+    it('他のステップの写真には影響しない', () => {
+      const steps = [
+        makeStep({ id: 's1', photos: [makePhoto({ id: 'p1' })], order: 0 }),
+        makeStep({ id: 's2', photos: [makePhoto({ id: 'p2' })], order: 1 }),
+      ];
+      const { result } = renderHook(() =>
+        useNoteEditorViewModel(makeNote({ steps }))
+      );
+      act(() => result.current.removePhoto('s1', 'p1'));
+      expect(result.current.draft.steps[0].photos.length).toBe(0);
+      expect(result.current.draft.steps[1].photos.length).toBe(1);
+    });
+  });
+
+  describe('Undo', () => {
+    it('canUndoは初期状態でfalse', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote()));
+      expect(result.current.canUndo).toBe(false);
+    });
+
+    it('操作後にcanUndoがtrueになる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote()));
+      act(() => result.current.setTitle('変更'));
+      expect(result.current.canUndo).toBe(true);
+    });
+
+    it('undoで直前の状態に戻る', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ title: '元' })));
+      act(() => result.current.setTitle('変更後'));
+      expect(result.current.draft.title).toBe('変更後');
+
+      act(() => result.current.undo());
+      expect(result.current.draft.title).toBe('元');
+    });
+
+    it('複数操作後に連続undoで順番に戻る', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ title: 'A' })));
+      act(() => result.current.setTitle('B'));
+      act(() => result.current.setTitle('C'));
+      act(() => result.current.setTitle('D'));
+
+      act(() => result.current.undo());
+      expect(result.current.draft.title).toBe('C');
+
+      act(() => result.current.undo());
+      expect(result.current.draft.title).toBe('B');
+
+      act(() => result.current.undo());
+      expect(result.current.draft.title).toBe('A');
+    });
+
+    it('history空の時undoしても何も起きない', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ title: '元' })));
+      act(() => result.current.undo());
+      expect(result.current.draft.title).toBe('元');
+      expect(result.current.canUndo).toBe(false);
+    });
+
+    it('resetでhistoryがクリアされる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote()));
+      act(() => result.current.setTitle('変更1'));
+      act(() => result.current.setTitle('変更2'));
+      expect(result.current.canUndo).toBe(true);
+
+      act(() => result.current.reset(makeNote({ title: 'リセット' })));
+      expect(result.current.canUndo).toBe(false);
+    });
+
+    it('revertでhistoryがクリアされる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote()));
+      act(() => result.current.setTitle('変更'));
+      expect(result.current.canUndo).toBe(true);
+
+      act(() => result.current.revert());
+      expect(result.current.canUndo).toBe(false);
+    });
+
+    it('undoで全て戻すとisDirtyがfalseになる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ title: '元' })));
+      act(() => result.current.setTitle('変更'));
+      expect(result.current.isDirty).toBe(true);
+
+      act(() => result.current.undo());
+      expect(result.current.isDirty).toBe(false);
+    });
+
+    it('写真削除後にundoで写真が復活する', () => {
+      const photo: Photo = {
+        id: 'p1', url: 'http://example.com/1.jpg', annotations: [],
+        cropRegion: null, takenAt: null, createdAt: '2026-01-01T00:00:00Z', order: 0,
+      };
+      const step = makeStep({ id: 's1', photos: [photo] });
+      const { result } = renderHook(() =>
+        useNoteEditorViewModel(makeNote({ steps: [step] }))
+      );
+      act(() => result.current.removePhoto('s1', 'p1'));
+      expect(result.current.draft.steps[0].photos.length).toBe(0);
+
+      act(() => result.current.undo());
+      expect(result.current.draft.steps[0].photos.length).toBe(1);
+      expect(result.current.draft.steps[0].photos[0].id).toBe('p1');
+    });
+  });
+
+  describe('アイキャッチ', () => {
+    it('setEyecatchPhotoIdでアイキャッチを設定できる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote()));
+      act(() => result.current.setEyecatchPhotoId('photo-1'));
+      expect(result.current.draft.eyecatchPhotoId).toBe('photo-1');
+      expect(result.current.isDirty).toBe(true);
+    });
+
+    it('setEyecatchPhotoId(null)でクリアできる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ eyecatchPhotoId: 'photo-1' })));
+      act(() => result.current.setEyecatchPhotoId(null));
+      expect(result.current.draft.eyecatchPhotoId).toBeNull();
+    });
+
+    it('getAllPhotosが全ステップ+未割り当ての写真をフラットに返す', () => {
+      const p1: Photo = { id: 'p1', url: 'u1', annotations: [], cropRegion: null, takenAt: null, createdAt: '2026-01-01T00:00:00Z', order: 0 };
+      const p2: Photo = { id: 'p2', url: 'u2', annotations: [], cropRegion: null, takenAt: null, createdAt: '2026-01-02T00:00:00Z', order: 0 };
+      const p3: Photo = { id: 'p3', url: 'u3', annotations: [], cropRegion: null, takenAt: null, createdAt: '2026-01-03T00:00:00Z', order: 0 };
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({
+        steps: [makeStep({ id: 's1', photos: [p1] }), makeStep({ id: 's2', photos: [p2], order: 1 })],
+        unassignedPhotos: [p3],
+      })));
+      expect(result.current.getAllPhotos().map(p => p.id)).toEqual(['p1', 'p2', 'p3']);
+    });
+  });
+
+  describe('未割り当て写真プール', () => {
+    const mkPhoto = (id: string, takenAt: string | null = null): Photo => ({
+      id, url: `http://example.com/${id}.jpg`, annotations: [], cropRegion: null,
+      takenAt, createdAt: '2026-01-01T00:00:00Z', order: 0,
+    });
+
+    it('addUnassignedPhotosでプールに追加される', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote()));
+      act(() => result.current.addUnassignedPhotos([mkPhoto('p1'), mkPhoto('p2')]));
+      expect(result.current.draft.unassignedPhotos.length).toBe(2);
+    });
+
+    it('takenAt順にソートされる', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote()));
+      act(() => result.current.addUnassignedPhotos([
+        mkPhoto('p1', '2026-01-03T00:00:00Z'),
+        mkPhoto('p2', '2026-01-01T00:00:00Z'),
+        mkPhoto('p3', '2026-01-02T00:00:00Z'),
+      ]));
+      expect(result.current.draft.unassignedPhotos.map(p => p.id)).toEqual(['p2', 'p3', 'p1']);
+    });
+
+    it('removeUnassignedPhotoでプールから削除される', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({
+        unassignedPhotos: [mkPhoto('p1'), mkPhoto('p2')],
+      })));
+      act(() => result.current.removeUnassignedPhoto('p1'));
+      expect(result.current.draft.unassignedPhotos.length).toBe(1);
+      expect(result.current.draft.unassignedPhotos[0].id).toBe('p2');
+    });
+
+    it('assignPhotoToStepでプールからステップに移動する', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({
+        steps: [makeStep({ id: 's1' })],
+        unassignedPhotos: [mkPhoto('p1')],
+      })));
+      act(() => result.current.assignPhotoToStep('p1', 's1'));
+      expect(result.current.draft.unassignedPhotos.length).toBe(0);
+      expect(result.current.draft.steps[0].photos.length).toBe(1);
+      expect(result.current.draft.steps[0].photos[0].id).toBe('p1');
+    });
+
+    it('createStepWithPhotoで新ステップ作成+写真割り当て', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote({
+        unassignedPhotos: [mkPhoto('p1')],
+      })));
+      act(() => result.current.createStepWithPhoto('p1'));
+      expect(result.current.draft.unassignedPhotos.length).toBe(0);
+      expect(result.current.draft.steps.length).toBe(1);
+      expect(result.current.draft.steps[0].photos.length).toBe(1);
+      expect(result.current.draft.steps[0].photos[0].id).toBe('p1');
+    });
+
+    it('undoで未割り当て操作が巻き戻される', () => {
+      const { result } = renderHook(() => useNoteEditorViewModel(makeNote()));
+      act(() => result.current.addUnassignedPhotos([mkPhoto('p1')]));
+      expect(result.current.draft.unassignedPhotos.length).toBe(1);
+
+      act(() => result.current.undo());
+      expect(result.current.draft.unassignedPhotos.length).toBe(0);
     });
   });
 });

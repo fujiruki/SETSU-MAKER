@@ -8,3 +8,4 @@ define('DB_PATH',    __DIR__ . '/database.sqlite');
 define('UPLOAD_DIR', __DIR__ . '/uploads/');
 define('DATA_DIR',   __DIR__ . '/data/');
 define('APP_ID',     'sm');
+define('UNCATEGORIZED_ID', 'uncategorized');

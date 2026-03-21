@@ -1,62 +1,71 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ChevronRight, Edit2, BookOpen, Star, ArrowLeft } from 'lucide-react';
 import { StepCard } from '../components/StepCard';
-import type { Note, Photo } from '../models/types';
+import type { Note, Tag, Category, Photo } from '../models/types';
+import { noteRepo, categoryRepo, tagRepo } from '../repositories/ApiNoteRepository';
 
-const MOCK_NOTE: Note = {
-  id: 'note-1',
-  title: '引き戸の建て込み手順',
-  categoryId: 'cat-2',
-  tagIds: ['t1', 't2'],
-  steps: [
-    {
-      id: 'step-1',
-      order: 0,
-      title: '框の確認',
-      description: '縦框・横框のサイズを確認し、建具と突き合わせる。',
-      highlights: [
-        { id: 'h1', type: 'warning', content: '反りがある場合は先に矯正すること' },
-      ],
-      photos: [],
-      hint: '午前中の光が入る時に確認すると反りが見やすい',
-    },
-  ],
-  eyecatchPhotoId: null,
-  handwritingData: null,
-  isFavorite: true,
-  createdAt: '2026-03-10T00:00:00Z',
-  updatedAt: '2026-03-15T00:00:00Z',
-};
-
-const MOCK_TAGS = [
-  { id: 't1', name: '建具' },
-  { id: 't2', name: '引き戸' },
-];
-
-type ViewMode = 'view' | 'edit' | 'hint';
+type ViewMode = 'view' | 'hint';
 
 export function NoteView() {
   const { noteId } = useParams();
   const navigate = useNavigate();
   const [mode, setMode] = useState<ViewMode>('view');
   const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
-  const note = MOCK_NOTE;
+  const [note, setNote] = useState<Note | null>(null);
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
-  const tags = MOCK_TAGS.filter((t) => note.tagIds.includes(t.id));
+  useEffect(() => {
+    if (!noteId) return;
+    noteRepo.getById(noteId).then(setNote).catch(console.error);
+  }, [noteId]);
+
+  useEffect(() => {
+    tagRepo.getAll().then(setAllTags).catch(console.error);
+    categoryRepo.getAll().then(setCategories).catch(console.error);
+  }, []);
+
+  if (!note) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center text-gray-400">
+        読み込み中...
+      </div>
+    );
+  }
+
+  const tags = allTags.filter((t) => note.tagIds.includes(t.id));
+
+  const getBreadcrumb = (categoryId: string): Category[] => {
+    const path: Category[] = [];
+    let current = categories.find((c) => c.id === categoryId);
+    while (current) {
+      path.unshift(current);
+      current = current.parentId
+        ? categories.find((c) => c.id === current!.parentId)
+        : undefined;
+    }
+    return path;
+  };
+  const breadcrumb = getBreadcrumb(note.categoryId);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center gap-2 px-4 py-2">
-          <Link to="/app" className="text-gray-400 hover:text-gray-600 touch-manipulation p-1">
+          <Link to="/app" className="text-gray-400 hover:text-gray-600 touch-manipulation p-3 -ml-2">
             <ArrowLeft size={20} />
           </Link>
 
-          <nav className="flex items-center gap-1 text-sm text-gray-500 flex-1 min-w-0">
-            <Link to="/categories/cat-1" className="hover:text-gray-700 truncate">建具</Link>
-            <ChevronRight size={14} className="shrink-0" />
-            <Link to="/categories/cat-2" className="hover:text-gray-700 truncate">引き戸</Link>
+          <nav className="flex items-center gap-1 text-sm text-gray-500 flex-1 min-w-0 overflow-hidden">
+            {breadcrumb.map((cat, i) => (
+              <span key={cat.id} className="flex items-center gap-1 min-w-0">
+                {i > 0 && <ChevronRight size={14} className="shrink-0" />}
+                <Link to={`/categories/${cat.id}`} className="hover:text-gray-700 truncate">
+                  {cat.name}
+                </Link>
+              </span>
+            ))}
           </nav>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -69,7 +78,7 @@ export function NoteView() {
               }`}
             >
               <BookOpen size={15} />
-              ヒント
+              ヒント編集
             </button>
             <button
               onClick={() => navigate(`/notes/${noteId}/edit`, { state: { note } })}

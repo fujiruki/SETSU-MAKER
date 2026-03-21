@@ -13,7 +13,7 @@ const makeRepo = (overrides: Partial<CategoryRepository> = {}): CategoryReposito
     parentId: parentId ?? null,
     order: 0,
   })),
-  update: vi.fn().mockImplementation(async (id, name) => ({ id, name, parentId: null, order: 0 })),
+  update: vi.fn().mockImplementation(async (id, patch) => ({ id, name: patch.name ?? '', parentId: patch.parentId ?? null, order: 0 })),
   delete: vi.fn().mockResolvedValue(undefined),
   ...overrides,
 });

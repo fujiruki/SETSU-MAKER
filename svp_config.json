@@ -14,9 +14,9 @@
       "name": "api",
       "type": "php",
       "cwd": "api",
-      "command": "php -S localhost:8004 -t .",
+      "command": "php -S localhost:8004 index.php",
       "port": 8004,
-      "healthCheck": "http://localhost:8004/api/health"
+      "healthCheck": "http://localhost:8004/health"
     }
   ]
 }

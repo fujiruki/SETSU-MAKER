@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// PHP built-in server: serve static files directly
+if (php_sapi_name() === 'cli-server') {
+    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    $file = __DIR__ . $uri;
+    if (is_file($file)) return false;
+}
+
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/storage/StorageInterface.php';
 require_once __DIR__ . '/storage/SqliteStorage.php';
@@ -11,7 +18,7 @@ if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, X-HTTP-Method-Override');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
@@ -23,7 +30,10 @@ $storage = STORAGE_MODE === 'filesystem' ? new FilesystemStorage() : new SqliteS
 $path   = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $path   = preg_replace('#^/contents/sm/api#', '', $path);
 $method = $_SERVER['REQUEST_METHOD'];
-$body   = json_decode(file_get_contents('php://input'), true) ?? [];
+if ($method === 'POST' && !empty($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'])) {
+    $method = strtoupper($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE']);
+}
+$body = json_decode(file_get_contents('php://input'), true) ?? [];
 
 route($method, $path, $body, $storage);
 
@@ -42,6 +52,10 @@ function route(string $method, string $path, array $body, StorageInterface $s): 
             => smJson($s->getCategories()),
         $method === 'POST' && $path === '/categories'
             => smJson($s->createCategory($body)),
+        $method === 'PUT'    && preg_match('#^/categories/([^/]+)$#', $path, $m)
+            => smJson($s->updateCategory($m[1], $body) ?: smError(404, 'Not Found')),
+        $method === 'DELETE' && preg_match('#^/categories/([^/]+)$#', $path, $m)
+            => smJson(['ok' => $s->deleteCategory($m[1])]),
 
         $method === 'GET'  && $path === '/tags'
             => smJson($s->getTags($_GET['q'] ?? '')),
@@ -62,6 +76,8 @@ function route(string $method, string $path, array $body, StorageInterface $s): 
 
         $method === 'POST' && preg_match('#^/notes/([^/]+)/steps/([^/]+)/photos$#', $path, $m)
             => smJson(uploadPhoto($m[1], $m[2])),
+        $method === 'POST' && preg_match('#^/notes/([^/]+)/photos$#', $path, $m)
+            => smJson(uploadPhoto($m[1], '__unassigned__')),
 
         default => smError(404, 'Not Found'),
     };
@@ -97,6 +113,32 @@ function smUuid(): string
 function smNow(): string
 {
     return date('c');
+}
+
+// ─────────────────────────────────────────────────────────────
+// アイキャッチURL解決
+// ─────────────────────────────────────────────────────────────
+function resolveEyecatchUrl(?string $photoId, array $steps, array $unassignedPhotos = []): ?string
+{
+    $allPhotos = [];
+    foreach ($steps as $step) {
+        foreach ($step['photos'] ?? [] as $photo) {
+            $allPhotos[] = $photo;
+        }
+    }
+    foreach ($unassignedPhotos as $photo) {
+        $allPhotos[] = $photo;
+    }
+    if (empty($allPhotos)) return null;
+
+    if ($photoId !== null && $photoId !== '') {
+        foreach ($allPhotos as $photo) {
+            if (($photo['id'] ?? '') === $photoId) return $photo['url'] ?? null;
+        }
+    }
+
+    $lastPhoto = end($allPhotos);
+    return $lastPhoto['url'] ?? null;
 }
 
 // ─────────────────────────────────────────────────────────────

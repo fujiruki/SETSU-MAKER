@@ -1,0 +1,26 @@
+# Dependencies
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+
+# API data (environment-specific)
+api/database.sqlite
+api/uploads/
+api/data/
+
+# Deploy artifacts
+deploy_tmp/
+deploy_staging/
+deploy.tar.gz
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dev server state
+.dev_server_url

@@ -28,6 +28,22 @@ class FilesystemStorage implements StorageInterface
         foreach ([$this->categoriesFile, $this->tagsFile] as $file) {
             if (!file_exists($file)) file_put_contents($file, '[]');
         }
+        $this->ensureDefaultCategory();
+    }
+
+    private function ensureDefaultCategory(): void
+    {
+        $cats = $this->readJson($this->categoriesFile);
+        foreach ($cats as $cat) {
+            if ($cat['id'] === UNCATEGORIZED_ID) return;
+        }
+        $cats[] = [
+            'id'       => UNCATEGORIZED_ID,
+            'name'     => '未分類',
+            'parentId' => null,
+            'order'    => 999999,
+        ];
+        $this->writeJson($this->categoriesFile, $cats);
     }
 
     private function readJson(string $path): array
@@ -70,6 +86,26 @@ class FilesystemStorage implements StorageInterface
         return $cat;
     }
 
+    public function updateCategory(string $id, array $body): array|false
+    {
+        if ($id === UNCATEGORIZED_ID) { smError(400, 'Cannot modify default category'); return false; }
+        $cats = $this->readJson($this->categoriesFile);
+        $idx  = array_search($id, array_column($cats, 'id'));
+        if ($idx === false) return false;
+        if (isset($body['name']))     $cats[$idx]['name']     = $body['name'];
+        if (array_key_exists('parentId', $body)) $cats[$idx]['parentId'] = $body['parentId'];
+        $this->writeJson($this->categoriesFile, $cats);
+        return $cats[$idx];
+    }
+
+    public function deleteCategory(string $id): bool
+    {
+        if ($id === UNCATEGORIZED_ID) { smError(400, 'Cannot delete default category'); return false; }
+        $cats = $this->readJson($this->categoriesFile);
+        $this->writeJson($this->categoriesFile, array_values(array_filter($cats, fn($c) => $c['id'] !== $id)));
+        return true;
+    }
+
     public function getTags(string $q = ''): array
     {
         $tags = $this->readJson($this->tagsFile);
@@ -107,7 +143,11 @@ class FilesystemStorage implements StorageInterface
                 'title'       => $note['title'],
                 'categoryId'  => $note['categoryId'],
                 'tagIds'      => $note['tagIds'] ?? [],
-                'eyecatchUrl' => null,
+                'eyecatchUrl' => resolveEyecatchUrl(
+                    $note['eyecatchPhotoId'] ?? null,
+                    $note['steps'] ?? [],
+                    $note['unassignedPhotos'] ?? []
+                ),
                 'isFavorite'  => (bool)($note['isFavorite'] ?? false),
                 'createdAt'   => $note['createdAt'],
                 'updatedAt'   => $note['updatedAt'],
@@ -132,16 +172,17 @@ class FilesystemStorage implements StorageInterface
         if (!is_dir($dir)) mkdir($dir, 0755, true);
 
         $note = [
-            'id'              => $id,
-            'title'           => $body['title']      ?? '',
-            'categoryId'      => $body['categoryId'] ?? '',
-            'tagIds'          => [],
-            'steps'           => [],
-            'eyecatchPhotoId' => null,
-            'handwritingData' => null,
-            'isFavorite'      => false,
-            'createdAt'       => $now,
-            'updatedAt'       => $now,
+            'id'               => $id,
+            'title'            => $body['title']      ?? '',
+            'categoryId'       => $body['categoryId'] ?? '',
+            'tagIds'           => [],
+            'steps'            => [],
+            'unassignedPhotos' => [],
+            'eyecatchPhotoId'  => null,
+            'handwritingData'  => null,
+            'isFavorite'       => false,
+            'createdAt'        => $now,
+            'updatedAt'        => $now,
         ];
         $this->writeJson($this->noteFile($id), $note);
         return $note;
@@ -158,9 +199,10 @@ class FilesystemStorage implements StorageInterface
             'id'              => $id,
             'title'           => $body['title']            ?? '',
             'categoryId'      => $body['categoryId']       ?? '',
-            'tagIds'          => $body['tagIds']           ?? [],
-            'steps'           => $body['steps']            ?? [],
-            'eyecatchPhotoId' => $body['eyecatchPhotoId']  ?? null,
+            'tagIds'           => $body['tagIds']            ?? [],
+            'steps'            => $body['steps']             ?? [],
+            'unassignedPhotos' => $body['unassignedPhotos']  ?? [],
+            'eyecatchPhotoId'  => $body['eyecatchPhotoId']   ?? null,
             'handwritingData' => $body['handwritingData']  ?? null,
             'isFavorite'      => (bool)($body['isFavorite'] ?? false),
             'updatedAt'       => $now,

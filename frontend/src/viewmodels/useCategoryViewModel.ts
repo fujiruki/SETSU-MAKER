@@ -52,8 +52,8 @@ export function useCategoryViewModel(repo: CategoryRepository) {
   );
 
   const updateCategory = useCallback(
-    async (id: string, name: string) => {
-      const updated = await repo.update(id, name);
+    async (id: string, patch: { name?: string; parentId?: string | null }) => {
+      const updated = await repo.update(id, patch);
       setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
       return updated;
     },

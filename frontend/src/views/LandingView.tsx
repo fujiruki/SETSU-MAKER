@@ -46,7 +46,7 @@ const USER_TYPES = [
 
 export function LandingView() {
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#0f172a', color: 'white' }}>
+    <div className="min-h-dvh flex flex-col" style={{ background: '#0f172a', color: 'white' }}>
 
       {/* ナビゲーション */}
       <header className="flex items-center justify-between px-8 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>

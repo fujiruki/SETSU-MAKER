@@ -1,18 +1,27 @@
 import { useState, useCallback } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { Note, Step, HighlightType } from '../models/types';
+import type { Note, Step, Photo, HighlightType } from '../models/types';
 
 export function useNoteEditorViewModel(initialNote: Note) {
   const [draft, setDraft] = useState<Note>(initialNote);
   const [isDirty, setIsDirty] = useState(false);
+  const [history, setHistory] = useState<Note[]>([]);
 
   const mutate = useCallback((updater: (prev: Note) => Note) => {
-    setDraft(updater);
+    setDraft((prev) => {
+      setHistory((h) => [...h, prev]);
+      return updater(prev);
+    });
     setIsDirty(true);
   }, []);
 
   const setTitle = useCallback(
     (title: string) => mutate((n) => ({ ...n, title })),
+    [mutate]
+  );
+
+  const setCategoryId = useCallback(
+    (categoryId: string) => mutate((n) => ({ ...n, categoryId })),
     [mutate]
   );
 
@@ -154,17 +163,125 @@ export function useNoteEditorViewModel(initialNote: Note) {
     [mutate]
   );
 
+  const removePhoto = useCallback(
+    (stepId: string, photoId: string) =>
+      mutate((n) => ({
+        ...n,
+        steps: n.steps.map((s) =>
+          s.id === stepId
+            ? { ...s, photos: s.photos.filter((p) => p.id !== photoId) }
+            : s
+        ),
+      })),
+    [mutate]
+  );
+
+  const setEyecatchPhotoId = useCallback(
+    (photoId: string | null) => mutate((n) => ({ ...n, eyecatchPhotoId: photoId })),
+    [mutate]
+  );
+
+  const getAllPhotos = useCallback((): Photo[] => {
+    const photos: Photo[] = [];
+    for (const step of draft.steps) {
+      photos.push(...step.photos);
+    }
+    photos.push(...draft.unassignedPhotos);
+    return photos;
+  }, [draft.steps, draft.unassignedPhotos]);
+
+  const addUnassignedPhotos = useCallback(
+    (photos: Photo[]) =>
+      mutate((n) => {
+        const merged = [...n.unassignedPhotos, ...photos].sort((a, b) =>
+          (a.takenAt ?? a.createdAt).localeCompare(b.takenAt ?? b.createdAt)
+        );
+        return { ...n, unassignedPhotos: merged };
+      }),
+    [mutate]
+  );
+
+  const removeUnassignedPhoto = useCallback(
+    (photoId: string) =>
+      mutate((n) => ({
+        ...n,
+        unassignedPhotos: n.unassignedPhotos.filter((p) => p.id !== photoId),
+      })),
+    [mutate]
+  );
+
+  const assignPhotoToStep = useCallback(
+    (photoId: string, stepId: string) =>
+      mutate((n) => {
+        const photo = n.unassignedPhotos.find((p) => p.id === photoId);
+        if (!photo) return n;
+        return {
+          ...n,
+          unassignedPhotos: n.unassignedPhotos.filter((p) => p.id !== photoId),
+          steps: n.steps.map((s) =>
+            s.id === stepId ? { ...s, photos: [...s.photos, photo] } : s
+          ),
+        };
+      }),
+    [mutate]
+  );
+
+  const createStepWithPhoto = useCallback(
+    (photoId: string) =>
+      mutate((n) => {
+        const photo = n.unassignedPhotos.find((p) => p.id === photoId);
+        if (!photo) return n;
+        const newStep: Step = {
+          id: uuid(),
+          order: n.steps.length,
+          title: '',
+          description: '',
+          highlights: [],
+          photos: [photo],
+          hint: '',
+        };
+        return {
+          ...n,
+          unassignedPhotos: n.unassignedPhotos.filter((p) => p.id !== photoId),
+          steps: [...n.steps, newStep],
+        };
+      }),
+    [mutate]
+  );
+
+  const undo = useCallback(() => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      setDraft(prev);
+      const next = h.slice(0, -1);
+      if (next.length === 0) setIsDirty(false);
+      return next;
+    });
+  }, []);
+
+  const canUndo = history.length > 0;
+
   const resetDirty = useCallback(() => setIsDirty(false), []);
+
+  const reset = useCallback((note: Note) => {
+    setDraft(note);
+    setIsDirty(false);
+    setHistory([]);
+  }, []);
 
   const revert = useCallback(() => {
     setDraft(initialNote);
     setIsDirty(false);
+    setHistory([]);
   }, [initialNote]);
 
   return {
     draft,
     isDirty,
+    canUndo,
     setTitle,
+    setCategoryId,
     addTag,
     removeTag,
     addStep,
@@ -175,7 +292,16 @@ export function useNoteEditorViewModel(initialNote: Note) {
     addHighlight,
     updateHighlight,
     removeHighlight,
+    removePhoto,
+    setEyecatchPhotoId,
+    getAllPhotos,
+    addUnassignedPhotos,
+    removeUnassignedPhoto,
+    assignPhotoToStep,
+    createStepWithPhoto,
+    undo,
     resetDirty,
+    reset,
     revert,
   };
 }

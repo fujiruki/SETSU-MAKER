@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { GripVertical, Trash2, Plus, Camera, Upload, Clipboard } from 'lucide-react';
+import { GripVertical, Trash2, Plus, Camera, Upload, Clipboard, X } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { HighlightBlock, AddHighlightButton } from './HighlightBlock';
@@ -16,6 +16,7 @@ interface StepCardProps {
   onUpdateHighlight: (highlightId: string, content: string) => void;
   onRemoveHighlight: (highlightId: string) => void;
   onAddPhotos: (files: FileList) => void;
+  onRemovePhoto?: (photoId: string) => void;
   onPhotoClick: (photo: Photo) => void;
 }
 
@@ -30,6 +31,7 @@ export function StepCard({
   onUpdateHighlight,
   onRemoveHighlight,
   onAddPhotos,
+  onRemovePhoto,
   onPhotoClick,
 }: StepCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -47,6 +49,7 @@ export function StepCard({
 
   return (
     <div ref={setNodeRef} style={style} className="bg-white border border-gray-200 rounded-xl shadow-sm">
+      {/* 上段: タイトル */}
       <div className="flex items-start gap-2 p-3 border-b border-gray-100">
         {editable && (
           <button
@@ -83,53 +86,58 @@ export function StepCard({
         )}
       </div>
 
+      {/* 中段: 左=画像 右=説明+ヒント */}
       <div className="flex gap-3 p-3">
-        <div className="flex-1 space-y-3">
-          {step.photos.length > 0 && (
-            <div className="space-y-2">
-              {step.photos.map((photo) => (
-                <PhotoThumbnail
-                  key={photo.id}
-                  photo={photo}
-                  onClick={() => onPhotoClick(photo)}
-                />
-              ))}
-            </div>
-          )}
+        {/* 左列: 画像 */}
+        <div className="w-2/5 shrink-0 space-y-2">
+          {step.photos.map((photo) => (
+            <PhotoThumbnail
+              key={photo.id}
+              photo={photo}
+              editable={editable}
+              onClick={() => onPhotoClick(photo)}
+              onRemove={onRemovePhoto ? () => onRemovePhoto(photo.id) : undefined}
+            />
+          ))}
 
           {editable && (
-            <PhotoAddMenu
-              onAddPhotos={onAddPhotos}
-              showMenu={showPhotoMenu}
-              setShowMenu={setShowPhotoMenu}
-              fileInputRef={fileInputRef}
-              cameraInputRef={cameraInputRef}
-            />
+            <>
+              <PhotoAddMenu
+                onAddPhotos={onAddPhotos}
+                showMenu={showPhotoMenu}
+                setShowMenu={setShowPhotoMenu}
+                fileInputRef={fileInputRef}
+                cameraInputRef={cameraInputRef}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
+              />
+            </>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
-          />
+        </div>
 
+        {/* 右列: 説明 + ヒント */}
+        <div className="flex-1 min-w-0 space-y-3">
           {editable ? (
             <textarea
               value={step.description}
               onChange={(e) => onUpdate({ description: e.target.value })}
               placeholder="説明を入力..."
               rows={3}
-              className="w-full text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 resize-none outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+              className="w-full text-base text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 resize-none outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
             />
           ) : (
             step.description && (
@@ -137,6 +145,26 @@ export function StepCard({
             )
           )}
 
+          <div className="border border-dashed border-gray-200 rounded-lg p-2">
+            <p className="text-sm text-gray-400 mb-1">ヒント</p>
+            {editable || hintEditable ? (
+              <textarea
+                value={step.hint}
+                onChange={(e) => onUpdate({ hint: e.target.value })}
+                placeholder="補足情報..."
+                rows={3}
+                className="w-full text-base text-gray-600 bg-transparent resize-none outline-none"
+              />
+            ) : (
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{step.hint || '—'}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 下段: ハイライト + コントロール */}
+      {(step.highlights.length > 0 || editable) && (
+        <div className="px-3 pb-3 space-y-2">
           {step.highlights.map((h) => (
             <HighlightBlock
               key={h.id}
@@ -151,31 +179,22 @@ export function StepCard({
             <AddHighlightButton onAdd={onAddHighlight} />
           )}
         </div>
-
-        <div className="w-32 shrink-0">
-          {(editable || hintEditable || step.hint) && (
-            <div className="border border-dashed border-gray-200 rounded-lg p-2">
-              <p className="text-xs text-gray-400 mb-1">ヒント</p>
-              {editable || hintEditable ? (
-                <textarea
-                  value={step.hint}
-                  onChange={(e) => onUpdate({ hint: e.target.value })}
-                  placeholder="補足情報..."
-                  rows={4}
-                  className="w-full text-xs text-gray-600 bg-transparent resize-none outline-none"
-                />
-              ) : (
-                <p className="text-xs text-gray-600 whitespace-pre-wrap">{step.hint}</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
-function PhotoThumbnail({ photo, onClick }: { photo: Photo; onClick: () => void }) {
+function PhotoThumbnail({
+  photo,
+  editable,
+  onClick,
+  onRemove,
+}: {
+  photo: Photo;
+  editable: boolean;
+  onClick: () => void;
+  onRemove?: () => void;
+}) {
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const handleLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     setNaturalSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight });
@@ -185,35 +204,48 @@ function PhotoThumbnail({ photo, onClick }: { photo: Photo; onClick: () => void 
 
   const btnCls = "block w-full rounded-lg overflow-hidden border border-gray-200 hover:border-blue-400 touch-manipulation active:opacity-80";
 
+  const removeBtn = editable && onRemove && (
+    <button
+      onClick={(e) => { e.stopPropagation(); onRemove(); }}
+      className="absolute top-1 right-1 z-10 bg-black/50 hover:bg-red-500 text-white rounded-full w-10 h-10 flex items-center justify-center touch-manipulation"
+    >
+      <X size={14} />
+    </button>
+  );
+
   if (crop && naturalSize) {
-    // クロップ領域のアスペクト比でコンテナを確保し、画像をオフセット表示
     const imgWidthPct = (naturalSize.w / crop.width) * 100;
     const leftPct     = -(crop.x / crop.width) * 100;
     const topPct      = -(crop.y / crop.height) * 100;
     return (
-      <button onClick={onClick} className={btnCls}>
-        <div style={{ position: 'relative', width: '100%', aspectRatio: `${crop.width}/${crop.height}`, overflow: 'hidden' }}>
-          <img
-            src={photo.url}
-            alt=""
-            style={{ position: 'absolute', width: `${imgWidthPct}%`, left: `${leftPct}%`, top: `${topPct}%` }}
-            onLoad={handleLoad}
-          />
-        </div>
-      </button>
+      <div className="relative">
+        {removeBtn}
+        <button onClick={onClick} className={btnCls}>
+          <div style={{ position: 'relative', width: '100%', aspectRatio: `${crop.width}/${crop.height}`, overflow: 'hidden' }}>
+            <img
+              src={photo.url}
+              alt=""
+              style={{ position: 'absolute', width: `${imgWidthPct}%`, left: `${leftPct}%`, top: `${topPct}%` }}
+              onLoad={handleLoad}
+            />
+          </div>
+        </button>
+      </div>
     );
   }
 
-  // クロップなし or 読み込み前: 元画像の比率通りに表示
   return (
-    <button onClick={onClick} className={btnCls}>
-      <img
-        src={photo.url}
-        alt=""
-        className="block w-full h-auto"
-        onLoad={handleLoad}
-      />
-    </button>
+    <div className="relative">
+      {removeBtn}
+      <button onClick={onClick} className={btnCls}>
+        <img
+          src={photo.url}
+          alt=""
+          className="block w-full h-auto"
+          onLoad={handleLoad}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -315,7 +347,7 @@ export function StepInsertButton({ onInsert }: StepInsertButtonProps) {
       <div className={`flex-1 border-t transition-colors ${hovered ? 'border-blue-300' : 'border-gray-200'}`} />
       <button
         onClick={onInsert}
-        className={`absolute left-1/2 -translate-x-1/2 flex items-center justify-center w-7 h-7 rounded border-2 bg-white transition-all touch-manipulation ${
+        className={`absolute left-1/2 -translate-x-1/2 flex items-center justify-center w-10 h-10 rounded border-2 bg-white transition-all touch-manipulation ${
           hovered
             ? 'border-blue-400 text-blue-500 shadow-sm scale-110'
             : 'border-gray-200 text-gray-300'

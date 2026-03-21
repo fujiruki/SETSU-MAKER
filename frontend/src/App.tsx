@@ -10,7 +10,10 @@ export default function App() {
     <BrowserRouter basename="/contents/sm">
       <Routes>
         <Route path="/" element={<LandingView />} />
-        <Route path="/app" element={<DashboardView />} />
+        <Route path="/app"       element={<DashboardView />} />
+        <Route path="/favorites" element={<DashboardView />} />
+        <Route path="/notes"     element={<DashboardView />} />
+        <Route path="/tags"      element={<DashboardView />} />
         <Route path="/categories" element={<CategoryExplorerView />} />
         <Route path="/categories/:categoryId" element={<CategoryExplorerView />} />
         <Route path="/notes/:noteId" element={<NoteView />} />
