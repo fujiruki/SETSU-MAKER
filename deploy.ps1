@@ -4,7 +4,7 @@ $serverHost = "www1045.conoha.ne.jp"
 $serverUser = "c6924945"
 $serverPort = "8022"
 $remoteDir  = "public_html/door-fujita.com/contents/sm"
-$sshKeyPath = "../Youkan/docs/01_RULES/UPLOAD/key-2025-11-29-07-10.pem"
+$sshKeyPath = "C:\Fujiruki\Secret\key-2026-03-21-18-16-ConohaforAI.pem"
 $archiveName = "deploy.tar.gz"
 
 Write-Host "SETSU-MAKER デプロイ開始..." -ForegroundColor Cyan

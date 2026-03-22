@@ -44,7 +44,7 @@ export function EyecatchPickerModal({ photos, selectedPhotoId, onSelect, onClose
                         : 'border-gray-200 hover:border-blue-300'
                     }`}
                   >
-                    <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                    <img src={photo.thumbnailUrl || photo.url} alt="" className="w-full h-full object-cover" />
                     {selectedPhotoId === photo.id && (
                       <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center">
                         <Check size={24} className="text-white drop-shadow" />

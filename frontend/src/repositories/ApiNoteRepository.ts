@@ -6,13 +6,14 @@ const BASE = '/contents/sm/api';
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? 'GET').toUpperCase();
   const override = method === 'PUT' || method === 'DELETE';
+  const needsBody = method === 'POST' || method === 'PUT' || method === 'DELETE';
+  const headers: Record<string, string> = {};
+  if (needsBody) headers['Content-Type'] = 'application/json';
+  if (override) headers['X-HTTP-Method-Override'] = method;
   const res = await fetch(BASE + path, {
     ...init,
     method: override ? 'POST' : method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(override ? { 'X-HTTP-Method-Override': method } : {}),
-    },
+    headers,
   });
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
   return res.json();
@@ -21,11 +22,12 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 // ─── NoteRepository ───────────────────────────────────────────
 
 export class ApiNoteRepository implements NoteRepository {
-  async getList(categoryId?: string, tagId?: string): Promise<NoteListItem[]> {
-    const q = new URLSearchParams();
-    if (categoryId) q.set('categoryId', categoryId);
-    if (tagId) q.set('tagId', tagId);
-    return apiFetch<NoteListItem[]>(`/notes?${q}`);
+  async getList(params?: { categoryId?: string; tagId?: string; q?: string }): Promise<NoteListItem[]> {
+    const query = new URLSearchParams();
+    if (params?.categoryId) query.set('categoryId', params.categoryId);
+    if (params?.tagId) query.set('tagId', params.tagId);
+    if (params?.q) query.set('q', params.q);
+    return apiFetch<NoteListItem[]>(`/notes?${query}`);
   }
 
   async getById(id: string): Promise<Note | null> {
@@ -72,16 +74,21 @@ export class ApiNoteRepository implements NoteRepository {
     await this.update({ ...note, isFavorite: !note.isFavorite });
   }
 
-  async uploadPhoto(noteId: string, stepId: string, file: File): Promise<{ url: string; takenAt: string | null }> {
+  async uploadPhoto(noteId: string, stepId: string, file: File, thumbnail?: File): Promise<{ url: string; thumbnailUrl: string | null; takenAt: string | null }> {
     const form = new FormData();
     form.append('photo', file);
+    if (thumbnail) form.append('thumbnail', thumbnail);
     const res = await fetch(`${BASE}/notes/${noteId}/steps/${stepId}/photos`, {
       method: 'POST',
       body: form,
     });
     if (!res.ok) throw new Error('Upload failed');
     const data = await res.json();
-    return { url: data.url as string, takenAt: (data.takenAt as string | null) ?? null };
+    return {
+      url: data.url as string,
+      thumbnailUrl: (data.thumbnailUrl as string | null) ?? null,
+      takenAt: (data.takenAt as string | null) ?? null,
+    };
   }
 }
 

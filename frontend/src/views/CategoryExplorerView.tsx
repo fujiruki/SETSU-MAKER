@@ -25,7 +25,7 @@ export function CategoryExplorerView() {
   }, []);
 
   const loadNotes = useCallback(() => {
-    noteRepo.getList(categoryId).then(setNotes).catch(console.error);
+    noteRepo.getList({ categoryId }).then(setNotes).catch(console.error);
   }, [categoryId]);
 
   useEffect(() => { loadCategories(); }, [loadCategories]);

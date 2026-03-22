@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ChevronRight, Edit2, BookOpen, Star, ArrowLeft } from 'lucide-react';
 import { StepCard } from '../components/StepCard';
@@ -15,6 +15,7 @@ export function NoteView() {
   const [note, setNote] = useState<Note | null>(null);
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!noteId) return;
@@ -25,6 +26,24 @@ export function NoteView() {
     tagRepo.getAll().then(setAllTags).catch(console.error);
     categoryRepo.getAll().then(setCategories).catch(console.error);
   }, []);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 2500);
+  }, []);
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!note || !noteId) return;
+    const newFav = !note.isFavorite;
+    setNote({ ...note, isFavorite: newFav });
+    try {
+      await noteRepo.update({ ...note, isFavorite: newFav });
+      showToast(newFav ? 'お気に入りに追加しました' : 'お気に入りを解除しました');
+    } catch {
+      setNote({ ...note, isFavorite: !newFav });
+      showToast('更新に失敗しました');
+    }
+  }, [note, noteId, showToast]);
 
   if (!note) {
     return (
@@ -97,10 +116,16 @@ export function NoteView() {
             <span>作成日: {new Date(note.createdAt).toLocaleDateString('ja-JP')}</span>
             <div className="flex items-center gap-2">
               <span>更新日: {new Date(note.updatedAt).toLocaleDateString('ja-JP')}</span>
-              <Star
-                size={16}
-                className={note.isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
-              />
+              <button
+                onClick={handleToggleFavorite}
+                className="p-2 -m-1 touch-manipulation rounded-full hover:bg-yellow-50 active:scale-90 transition-transform"
+                title={note.isFavorite ? 'お気に入りを解除' : 'お気に入りに追加'}
+              >
+                <Star
+                  size={20}
+                  className={`transition-colors ${note.isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300 hover:text-yellow-300'}`}
+                />
+              </button>
             </div>
           </div>
 
@@ -141,15 +166,46 @@ export function NoteView() {
       </div>
 
       {lightboxPhoto && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-4 max-w-2xl w-full">
-            <img src={lightboxPhoto.url} alt="" className="w-full rounded-lg" />
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-[5vmin]"
+          onClick={(e) => { if (e.target === e.currentTarget) setLightboxPhoto(null); }}
+        >
+          <div
+            className="relative flex flex-col items-center"
+            style={{ maxWidth: '90vw', maxHeight: '90vh' }}
+          >
+            {lightboxPhoto.mediaType === 'video' ? (
+              <video
+                src={lightboxPhoto.url}
+                controls
+                playsInline
+                autoPlay
+                className="rounded-lg"
+                style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain' }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <img
+                src={lightboxPhoto.thumbnailUrl || lightboxPhoto.url}
+                alt=""
+                className="rounded-lg"
+                style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain' }}
+              />
+            )}
             <button
               onClick={() => setLightboxPhoto(null)}
-              className="mt-3 w-full py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
+              className="mt-3 px-6 py-2 bg-white/90 border border-gray-200 rounded-full text-sm hover:bg-white touch-manipulation"
             >
               閉じる
             </button>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-[fadeInUp_0.3s_ease-out]">
+          <div className="bg-gray-800 text-white text-sm px-5 py-2.5 rounded-full shadow-lg">
+            {toast}
           </div>
         </div>
       )}

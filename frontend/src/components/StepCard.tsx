@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { GripVertical, Trash2, Plus, Camera, Upload, Clipboard, X } from 'lucide-react';
+import { GripVertical, Trash2, Plus, Camera, Upload, Clipboard, X, Play, Video, Scissors } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { HighlightBlock, AddHighlightButton } from './HighlightBlock';
@@ -18,6 +18,7 @@ interface StepCardProps {
   onAddPhotos: (files: FileList) => void;
   onRemovePhoto?: (photoId: string) => void;
   onPhotoClick: (photo: Photo) => void;
+  onTrimVideo?: (photo: Photo) => void;
 }
 
 export function StepCard({
@@ -33,12 +34,14 @@ export function StepCard({
   onAddPhotos,
   onRemovePhoto,
   onPhotoClick,
+  onTrimVideo,
 }: StepCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: step.id });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoCameraInputRef = useRef<HTMLInputElement>(null);
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -97,6 +100,7 @@ export function StepCard({
               editable={editable}
               onClick={() => onPhotoClick(photo)}
               onRemove={onRemovePhoto ? () => onRemovePhoto(photo.id) : undefined}
+              onTrim={editable && onTrimVideo ? () => onTrimVideo(photo) : undefined}
             />
           ))}
 
@@ -108,11 +112,12 @@ export function StepCard({
                 setShowMenu={setShowPhotoMenu}
                 fileInputRef={fileInputRef}
                 cameraInputRef={cameraInputRef}
+                videoCameraInputRef={videoCameraInputRef}
               />
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*"
                 multiple
                 className="hidden"
                 onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
@@ -121,6 +126,14 @@ export function StepCard({
                 ref={cameraInputRef}
                 type="file"
                 accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
+              />
+              <input
+                ref={videoCameraInputRef}
+                type="file"
+                accept="video/*"
                 capture="environment"
                 className="hidden"
                 onChange={(e) => e.target.files && onAddPhotos(e.target.files)}
@@ -189,11 +202,13 @@ function PhotoThumbnail({
   editable,
   onClick,
   onRemove,
+  onTrim,
 }: {
   photo: Photo;
   editable: boolean;
   onClick: () => void;
   onRemove?: () => void;
+  onTrim?: () => void;
 }) {
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const handleLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -213,6 +228,36 @@ function PhotoThumbnail({
     </button>
   );
 
+  const isVideo = photo.mediaType === 'video';
+  const displayUrl = photo.thumbnailUrl || photo.url;
+
+  if (isVideo) {
+    return (
+      <div className="relative">
+        {removeBtn}
+        <button onClick={onClick} className={btnCls}>
+          <div className="relative bg-gray-900">
+            <video src={photo.url} className="block w-full h-auto" muted preload="metadata" playsInline />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-10 h-10 bg-white/80 rounded-full flex items-center justify-center">
+                <Play size={20} className="text-gray-800 ml-0.5" />
+              </div>
+            </div>
+          </div>
+        </button>
+        {onTrim && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onTrim(); }}
+            className="absolute bottom-1 right-1 z-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full w-9 h-9 flex items-center justify-center touch-manipulation shadow"
+            title="トリミング"
+          >
+            <Scissors size={14} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (crop && naturalSize) {
     const imgWidthPct = (naturalSize.w / crop.width) * 100;
     const leftPct     = -(crop.x / crop.width) * 100;
@@ -223,7 +268,7 @@ function PhotoThumbnail({
         <button onClick={onClick} className={btnCls}>
           <div style={{ position: 'relative', width: '100%', aspectRatio: `${crop.width}/${crop.height}`, overflow: 'hidden' }}>
             <img
-              src={photo.url}
+              src={displayUrl}
               alt=""
               style={{ position: 'absolute', width: `${imgWidthPct}%`, left: `${leftPct}%`, top: `${topPct}%` }}
               onLoad={handleLoad}
@@ -239,7 +284,7 @@ function PhotoThumbnail({
       {removeBtn}
       <button onClick={onClick} className={btnCls}>
         <img
-          src={photo.url}
+          src={displayUrl}
           alt=""
           className="block w-full h-auto"
           onLoad={handleLoad}
@@ -255,9 +300,10 @@ interface PhotoAddMenuProps {
   setShowMenu: (v: boolean) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   cameraInputRef: React.RefObject<HTMLInputElement | null>;
+  videoCameraInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
-function PhotoAddMenu({ onAddPhotos, showMenu, setShowMenu, fileInputRef, cameraInputRef }: PhotoAddMenuProps) {
+function PhotoAddMenu({ onAddPhotos, showMenu, setShowMenu, fileInputRef, cameraInputRef, videoCameraInputRef }: PhotoAddMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -299,7 +345,7 @@ function PhotoAddMenu({ onAddPhotos, showMenu, setShowMenu, fileInputRef, camera
         className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-400 hover:border-blue-400 hover:text-blue-500 w-full justify-center touch-manipulation"
       >
         <Camera size={16} />
-        写真を追加
+        写真・動画を追加
       </button>
 
       {showMenu && (
@@ -312,11 +358,18 @@ function PhotoAddMenu({ onAddPhotos, showMenu, setShowMenu, fileInputRef, camera
             写真を撮る
           </button>
           <button
+            onClick={() => { setShowMenu(false); videoCameraInputRef.current?.click(); }}
+            className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 touch-manipulation border-b border-gray-100"
+          >
+            <Video size={16} className="text-gray-400 shrink-0" />
+            動画を撮る
+          </button>
+          <button
             onClick={() => { setShowMenu(false); fileInputRef.current?.click(); }}
             className="flex items-center gap-3 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 touch-manipulation border-b border-gray-100"
           >
             <Upload size={16} className="text-gray-400 shrink-0" />
-            アップロード
+            ファイルから選ぶ
           </button>
           <button
             onClick={handleClipboard}

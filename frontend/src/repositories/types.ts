@@ -16,7 +16,7 @@ export interface TagRepository {
 }
 
 export interface NoteRepository {
-  getList(categoryId?: string, tagId?: string): Promise<NoteListItem[]>;
+  getList(params?: { categoryId?: string; tagId?: string; q?: string }): Promise<NoteListItem[]>;
   getById(id: string): Promise<Note | null>;
   getRecent(limit?: number): Promise<NoteListItem[]>;
   getFavorites(): Promise<NoteListItem[]>;
@@ -25,5 +25,5 @@ export interface NoteRepository {
   update(note: Note): Promise<Note>;
   delete(id: string): Promise<void>;
   toggleFavorite(id: string): Promise<void>;
-  uploadPhoto(noteId: string, stepId: string, file: File): Promise<{ url: string; takenAt: string | null }>;
+  uploadPhoto(noteId: string, stepId: string, file: File, thumbnail?: File): Promise<{ url: string; thumbnailUrl: string | null; takenAt: string | null }>;
 }

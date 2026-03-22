@@ -19,8 +19,10 @@ import { StepCard, StepInsertButton } from '../components/StepCard';
 import { TagInput } from '../components/TagInput';
 import { EyecatchPickerModal } from '../components/EyecatchPickerModal';
 import { useNoteEditorViewModel } from '../viewmodels/useNoteEditorViewModel';
+import { VideoTrimmer } from '../components/VideoTrimmer';
 import type { Note, Tag, Photo, Category } from '../models/types';
 import { noteRepo, categoryRepo, tagRepo } from '../repositories/ApiNoteRepository';
+import { resizeImage } from '../utils/imageResize';
 
 export function NoteEditView() {
   const { noteId } = useParams();
@@ -50,6 +52,10 @@ export function NoteEditView() {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showEyecatchPicker, setShowEyecatchPicker] = useState(false);
   const [unassignedContextMenu, setUnassignedContextMenu] = useState<{ photo: Photo; x: number; y: number } | null>(null);
+  const [trimmerState, setTrimmerState] = useState<{ file: File; stepId: string } | null>(null);
+  const [videoQueue, setVideoQueue] = useState<{ file: File; stepId: string }[]>([]);
+  const [videoPreview, setVideoPreview] = useState<Photo | null>(null);
+  const [retrimTarget, setRetrimTarget] = useState<{ photo: Photo; stepId: string } | null>(null);
   const bulkUploadRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -95,15 +101,42 @@ export function NoteEditView() {
     }
   };
 
+  const THUMBNAIL_MAX_SIZE = 480;
+
+  const mimeToExt = (mime: string): string => {
+    if (mime.includes('webm')) return 'webm';
+    if (mime.includes('mp4')) return 'mp4';
+    if (mime.includes('quicktime') || mime.includes('mov')) return 'mov';
+    if (mime.includes('png')) return 'png';
+    if (mime.includes('gif')) return 'gif';
+    if (mime.includes('webp')) return 'webp';
+    return 'jpg';
+  };
+
   const uploadPhotos = async (photos: Photo[], noteId: string, stepId: string) => {
     return Promise.all(
       photos.map(async (photo) => {
         if (!photo.url.startsWith('blob:')) return photo;
         const res = await fetch(photo.url);
         const blob = await res.blob();
-        const file = new File([blob], `${photo.id}.jpg`, { type: blob.type });
-        const result = await noteRepo.uploadPhoto(noteId, stepId, file);
-        return { ...photo, url: result.url, takenAt: result.takenAt ?? photo.takenAt };
+        const isVideo = photo.mediaType === 'video';
+        const ext = isVideo ? mimeToExt(blob.type) : 'jpg';
+        const file = new File([blob], `${photo.id}.${ext}`, { type: blob.type });
+        let thumbFile: File | undefined;
+        if (!isVideo) {
+          const thumbBlob = await resizeImage(blob, THUMBNAIL_MAX_SIZE);
+          if (thumbBlob !== blob) {
+            thumbFile = new File([thumbBlob], `${photo.id}_thumb.jpg`, { type: 'image/jpeg' });
+          }
+        }
+        const result = await noteRepo.uploadPhoto(noteId, stepId, file, thumbFile);
+        return {
+          ...photo,
+          url: result.url,
+          thumbnailUrl: result.thumbnailUrl ?? undefined,
+          mediaType: photo.mediaType,
+          takenAt: result.takenAt ?? photo.takenAt,
+        };
       })
     );
   };
@@ -150,21 +183,114 @@ export function NoteEditView() {
   };
 
   const handleAddPhotos = (stepId: string, files: FileList) => {
-    const photos: Photo[] = Array.from(files).map((file, i) => ({
-      id: `photo-${Date.now()}-${i}`,
-      url: URL.createObjectURL(file),
+    const imageFiles: File[] = [];
+    const videos: { file: File; stepId: string }[] = [];
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('video/')) {
+        videos.push({ file, stepId });
+      } else {
+        imageFiles.push(file);
+      }
+    }
+
+    if (imageFiles.length > 0) {
+      const photos: Photo[] = imageFiles.map((file, i) => ({
+        id: `photo-${Date.now()}-${i}`,
+        mediaType: 'image' as const,
+        url: URL.createObjectURL(file),
+        annotations: [],
+        cropRegion: null,
+        takenAt: null,
+        createdAt: new Date().toISOString(),
+        order: i,
+      }));
+      const step = vm.draft.steps.find((s) => s.id === stepId);
+      if (step) {
+        const sorted = [...step.photos, ...photos].sort((a, b) =>
+          (a.takenAt ?? a.createdAt).localeCompare(b.takenAt ?? b.createdAt)
+        );
+        vm.updateStep(stepId, { photos: sorted.map((p, i) => ({ ...p, order: i })) });
+      }
+    }
+
+    if (videos.length > 0) {
+      setTrimmerState(videos[0]);
+      setVideoQueue(videos.slice(1));
+    }
+  };
+
+  const handleTrimComplete = (results: { blob: Blob; mediaType: 'video' | 'image'; duration: number }[]) => {
+    if (!trimmerState) return;
+    const { stepId } = trimmerState;
+    const photos: Photo[] = results.map((result, i) => ({
+      id: `video-${Date.now()}-${i}`,
+      mediaType: result.mediaType === 'video' ? 'video' as const : 'image' as const,
+      url: URL.createObjectURL(result.blob),
       annotations: [],
       cropRegion: null,
+      duration: result.duration,
       takenAt: null,
       createdAt: new Date().toISOString(),
       order: i,
     }));
+    if (stepId === '__unassigned__') {
+      vm.addUnassignedPhotos(photos);
+    } else {
+      const step = vm.draft.steps.find((s) => s.id === stepId);
+      if (step) {
+        vm.updateStep(stepId, { photos: [...step.photos, ...photos] });
+      }
+    }
+    if (videoQueue.length > 0) {
+      setTrimmerState(videoQueue[0]);
+      setVideoQueue(videoQueue.slice(1));
+    } else {
+      setTrimmerState(null);
+    }
+  };
+
+  const handleTrimExistingVideo = async (photo: Photo, stepId: string) => {
+    try {
+      const res = await fetch(photo.url);
+      const blob = await res.blob();
+      const file = new File([blob], 'retrim.mp4', { type: blob.type || 'video/mp4' });
+      setRetrimTarget({ photo, stepId });
+      setTrimmerState({ file, stepId });
+    } catch {
+      alert('動画の読み込みに失敗しました');
+    }
+  };
+
+  const handleRetrimComplete = (results: { blob: Blob; mediaType: 'video' | 'image'; duration: number }[]) => {
+    if (!retrimTarget) {
+      handleTrimComplete(results);
+      return;
+    }
+    const { photo, stepId } = retrimTarget;
     const step = vm.draft.steps.find((s) => s.id === stepId);
-    if (step) {
-      const sorted = [...step.photos, ...photos].sort((a, b) =>
-        (a.takenAt ?? a.createdAt).localeCompare(b.takenAt ?? b.createdAt)
-      );
-      vm.updateStep(stepId, { photos: sorted.map((p, i) => ({ ...p, order: i })) });
+    if (step && results.length > 0) {
+      const newPhotos: Photo[] = results.map((r, i) => ({
+        id: i === 0 ? photo.id : `video-${Date.now()}-${i}`,
+        mediaType: r.mediaType === 'video' ? 'video' as const : 'image' as const,
+        url: URL.createObjectURL(r.blob),
+        annotations: [],
+        cropRegion: null,
+        duration: r.duration,
+        takenAt: null,
+        createdAt: new Date().toISOString(),
+        order: 0,
+      }));
+      const idx = step.photos.findIndex((p) => p.id === photo.id);
+      const updated = [...step.photos];
+      updated.splice(idx, 1, ...newPhotos);
+      vm.updateStep(stepId, { photos: updated.map((p, j) => ({ ...p, order: j })) });
+    }
+    setRetrimTarget(null);
+    if (videoQueue.length > 0) {
+      setTrimmerState(videoQueue[0]);
+      setVideoQueue(videoQueue.slice(1));
+    } else {
+      setTrimmerState(null);
     }
   };
 
@@ -175,16 +301,29 @@ export function NoteEditView() {
   };
 
   const handleBulkUpload = (files: FileList) => {
-    const photos: Photo[] = Array.from(files).map((file, i) => ({
-      id: `photo-${Date.now()}-${i}`,
-      url: URL.createObjectURL(file),
-      annotations: [],
-      cropRegion: null,
-      takenAt: null,
-      createdAt: new Date().toISOString(),
-      order: i,
-    }));
-    vm.addUnassignedPhotos(photos);
+    const photos: Photo[] = [];
+    const videos: { file: File; stepId: string }[] = [];
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('video/')) {
+        videos.push({ file, stepId: '__unassigned__' });
+        continue;
+      }
+      photos.push({
+        id: `photo-${Date.now()}-${photos.length}`,
+        mediaType: 'image' as const,
+        url: URL.createObjectURL(file),
+        annotations: [],
+        cropRegion: null,
+        takenAt: null,
+        createdAt: new Date().toISOString(),
+        order: photos.length,
+      });
+    }
+    if (photos.length > 0) vm.addUnassignedPhotos(photos);
+    if (videos.length > 0) {
+      setTrimmerState(videos[0]);
+      setVideoQueue(videos.slice(1));
+    }
   };
 
   return (
@@ -225,12 +364,12 @@ export function NoteEditView() {
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 touch-manipulation"
             >
               <Upload size={15} />
-              <span className="hidden sm:inline">まとめてアップロード</span>
+              <span className="hidden sm:inline">まとめて追加</span>
             </button>
             <input
               ref={bulkUploadRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               className="hidden"
               onChange={(e) => e.target.files && handleBulkUpload(e.target.files)}
@@ -368,7 +507,14 @@ export function NoteEditView() {
                     onRemoveHighlight={(hid) => vm.removeHighlight(step.id, hid)}
                     onAddPhotos={(files) => handleAddPhotos(step.id, files)}
                     onRemovePhoto={(photoId) => vm.removePhoto(step.id, photoId)}
-                    onPhotoClick={(photo) => setLightboxPhoto({ photo, stepId: step.id })}
+                    onPhotoClick={(photo) => {
+                      if (photo.mediaType === 'video') {
+                        setVideoPreview(photo);
+                      } else {
+                        setLightboxPhoto({ photo, stepId: step.id });
+                      }
+                    }}
+                    onTrimVideo={(photo) => handleTrimExistingVideo(photo, step.id)}
                   />
                   <StepInsertButton onInsert={() => vm.insertStep(i)} />
                 </div>
@@ -404,7 +550,7 @@ export function NoteEditView() {
                   }}
                 >
                   <div className="aspect-square rounded-lg overflow-hidden border border-gray-200">
-                    <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                    <img src={photo.thumbnailUrl || photo.url} alt="" className="w-full h-full object-cover" />
                   </div>
                   <button
                     onClick={() => vm.createStepWithPhoto(photo.id)}
@@ -463,6 +609,41 @@ export function NoteEditView() {
         </div>
       )}
 
+      {videoPreview && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-[5vmin]"
+          onClick={(e) => { if (e.target === e.currentTarget) setVideoPreview(null); }}
+        >
+          <div
+            className="relative flex flex-col items-center"
+            style={{ maxWidth: '90vw', maxHeight: '90vh' }}
+          >
+            <video
+              src={videoPreview.url}
+              controls
+              playsInline
+              autoPlay
+              className="rounded-lg"
+              style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain' }}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={() => setVideoPreview(null)}
+              className="mt-3 px-6 py-2 bg-white/90 border border-gray-200 rounded-full text-sm hover:bg-white touch-manipulation"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
+      <VideoTrimmer
+        isOpen={!!trimmerState}
+        videoFile={trimmerState?.file ?? null}
+        onComplete={retrimTarget ? handleRetrimComplete : handleTrimComplete}
+        onClose={() => setTrimmerState(null)}
+      />
+
       <ImageEditorLightbox
         isOpen={!!lightboxPhoto}
         imageUrl={lightboxPhoto?.photo.url ?? null}
@@ -471,11 +652,15 @@ export function NoteEditView() {
           if (!lightboxPhoto) return;
           const { photo, stepId } = lightboxPhoto;
           const newUrl = URL.createObjectURL(result.annotatedBlob);
+          const thumbBlob = await resizeImage(result.annotatedBlob, THUMBNAIL_MAX_SIZE);
+          const newThumbUrl = thumbBlob !== result.annotatedBlob
+            ? URL.createObjectURL(thumbBlob)
+            : newUrl;
           const step = vm.draft.steps.find((s) => s.id === stepId);
           if (step) {
             const updatedPhotos = step.photos.map((p) =>
               p.id === photo.id
-                ? { ...p, url: newUrl, cropRegion: result.cropRegion }
+                ? { ...p, url: newUrl, thumbnailUrl: newThumbUrl, cropRegion: result.cropRegion }
                 : p
             );
             vm.updateStep(stepId, { photos: updatedPhotos });

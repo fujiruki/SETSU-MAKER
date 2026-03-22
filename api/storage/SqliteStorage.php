@@ -140,6 +140,7 @@ class SqliteStorage implements StorageInterface
         if (!empty($params['categoryId'])) { $where[] = 'category_id = ?'; $binds[] = $params['categoryId']; }
         if (!empty($params['favorite']))   { $where[] = 'is_favorite = 1'; }
         if (!empty($params['q']))          { $where[] = 'title LIKE ?'; $binds[] = '%' . $params['q'] . '%'; }
+        if (!empty($params['tagId']))      { $where[] = "tag_ids_json LIKE ?"; $binds[] = '%"' . $params['tagId'] . '"%'; }
 
         $sql = "SELECT id, title, category_id as categoryId, tag_ids_json, eyecatch_photo_id, steps_json, unassigned_photos_json, is_favorite, created_at, updated_at FROM sm_notes";
         if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }

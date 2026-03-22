@@ -23,12 +23,16 @@ export interface ShapeAnnotation {
   data: Record<string, unknown>;
 }
 
+export type MediaType = 'image' | 'video';
+
 export interface Photo {
   id: string;
+  mediaType?: MediaType;
   url: string;
   thumbnailUrl?: string;
   annotations: ShapeAnnotation[];
   cropRegion: CropRegion | null;
+  duration?: number;
   takenAt: string | null;
   createdAt: string;
   order: number;

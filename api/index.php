@@ -131,14 +131,16 @@ function resolveEyecatchUrl(?string $photoId, array $steps, array $unassignedPho
     }
     if (empty($allPhotos)) return null;
 
+    $target = null;
     if ($photoId !== null && $photoId !== '') {
         foreach ($allPhotos as $photo) {
-            if (($photo['id'] ?? '') === $photoId) return $photo['url'] ?? null;
+            if (($photo['id'] ?? '') === $photoId) { $target = $photo; break; }
         }
     }
-
-    $lastPhoto = end($allPhotos);
-    return $lastPhoto['url'] ?? null;
+    if (!$target) {
+        $target = end($allPhotos);
+    }
+    return $target['thumbnailUrl'] ?? $target['url'] ?? null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -150,10 +152,13 @@ function uploadPhoto(string $noteId, string $stepId): array
 
     $file = $_FILES['photo'];
     $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) {
+    $imageExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+    $videoExts = ['mp4', 'webm', 'mov'];
+    if (!in_array($ext, array_merge($imageExts, $videoExts))) {
         smError(400, 'Invalid file type');
         return [];
     }
+    $mediaType = in_array($ext, $videoExts) ? 'video' : 'image';
 
     $noteDir = UPLOAD_DIR . $noteId . '/';
     if (!is_dir($noteDir)) mkdir($noteDir, 0755, true);
@@ -161,7 +166,7 @@ function uploadPhoto(string $noteId, string $stepId): array
     $takenAt   = null;
     $timestamp = date('Ymd_His');
 
-    if (in_array($ext, ['jpg', 'jpeg']) && function_exists('exif_read_data')) {
+    if ($mediaType === 'image' && in_array($ext, ['jpg', 'jpeg']) && function_exists('exif_read_data')) {
         $exif = @exif_read_data($file['tmp_name']);
         if (!empty($exif['DateTimeOriginal'])) {
             $dt = DateTime::createFromFormat('Y:m:d H:i:s', $exif['DateTimeOriginal']);
@@ -175,16 +180,28 @@ function uploadPhoto(string $noteId, string $stepId): array
     $filename = $timestamp . '_' . substr(md5(uniqid()), 0, 6) . '.' . $ext;
     move_uploaded_file($file['tmp_name'], $noteDir . $filename);
 
-    // filesystem モード時はノートフォルダにもコピーして co-location を実現
     if (STORAGE_MODE === 'filesystem') {
         $fsDir = DATA_DIR . 'notes/' . $noteId . '/';
         if (!is_dir($fsDir)) mkdir($fsDir, 0755, true);
         copy($noteDir . $filename, $fsDir . $filename);
     }
 
+    $thumbnailUrl = null;
+    if (!empty($_FILES['thumbnail'])) {
+        $thumbDir = $noteDir . 'thumb/';
+        if (!is_dir($thumbDir)) mkdir($thumbDir, 0755, true);
+        $thumbFile = $_FILES['thumbnail'];
+        $thumbExt  = strtolower(pathinfo($thumbFile['name'], PATHINFO_EXTENSION));
+        $thumbName = pathinfo($filename, PATHINFO_FILENAME) . '_thumb.' . $thumbExt;
+        move_uploaded_file($thumbFile['tmp_name'], $thumbDir . $thumbName);
+        $thumbnailUrl = '/contents/sm/api/uploads/' . $noteId . '/thumb/' . $thumbName;
+    }
+
     return [
-        'url'      => '/contents/sm/api/uploads/' . $noteId . '/' . $filename,
-        'filename' => $filename,
-        'takenAt'  => $takenAt,
+        'url'          => '/contents/sm/api/uploads/' . $noteId . '/' . $filename,
+        'thumbnailUrl' => $thumbnailUrl,
+        'mediaType'    => $mediaType,
+        'filename'     => $filename,
+        'takenAt'      => $takenAt,
     ];
 }
