@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { ChevronRight, Edit2, BookOpen, Star, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Edit2, BookOpen, Star, ArrowLeft, Share2 } from 'lucide-react';
 import { StepCard } from '../components/StepCard';
 import type { Note, Tag, Category, Photo } from '../models/types';
 import { noteRepo, categoryRepo, tagRepo } from '../repositories/ApiNoteRepository';
@@ -31,6 +31,31 @@ export function NoteView() {
     setToast(message);
     setTimeout(() => setToast(null), 2500);
   }, []);
+
+  const handleShare = useCallback(async () => {
+    if (!note) return;
+    const lines: string[] = [`【${note.title}】`, ''];
+    note.steps.forEach((step, i) => {
+      lines.push(`■ 工程${i + 1}: ${step.title}`);
+      if (step.description) lines.push(step.description);
+      lines.push('');
+      for (const h of step.highlights) {
+        const icon = h.type === 'warning' ? '⚠️' : h.type === 'point' ? '💡' : '📝';
+        lines.push(`${icon} ${h.content}`);
+      }
+      if (step.highlights.length > 0) lines.push('');
+      if (step.hint) {
+        lines.push(`💡ヒント: ${step.hint}`);
+        lines.push('');
+      }
+    });
+    try {
+      await navigator.clipboard.writeText(lines.join('\n').trimEnd());
+      showToast('クリップボードにコピーしました');
+    } catch {
+      showToast('コピーに失敗しました');
+    }
+  }, [note, showToast]);
 
   const handleToggleFavorite = useCallback(async () => {
     if (!note || !noteId) return;
@@ -98,6 +123,13 @@ export function NoteView() {
             >
               <BookOpen size={15} />
               ヒント編集
+            </button>
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border touch-manipulation border-gray-200 hover:bg-gray-50 text-gray-600"
+            >
+              <Share2 size={15} />
+              共有
             </button>
             <button
               onClick={() => navigate(`/notes/${noteId}/edit`, { state: { note } })}

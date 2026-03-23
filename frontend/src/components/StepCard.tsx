@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, type RefCallback } from 'react';
 import { GripVertical, Trash2, Plus, Camera, Upload, Clipboard, X, Play, Video, Scissors } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -43,6 +43,15 @@ export function StepCard({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const videoCameraInputRef = useRef<HTMLInputElement>(null);
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+
+  const autoResize = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }, []);
+
+  const descRef = useCallback<RefCallback<HTMLTextAreaElement>>((el) => { autoResize(el); }, [autoResize]);
+  const hintRef = useCallback<RefCallback<HTMLTextAreaElement>>((el) => { autoResize(el); }, [autoResize]);
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -146,11 +155,12 @@ export function StepCard({
         <div className="flex-1 min-w-0 space-y-3">
           {editable ? (
             <textarea
+              ref={descRef}
               value={step.description}
-              onChange={(e) => onUpdate({ description: e.target.value })}
+              onChange={(e) => { onUpdate({ description: e.target.value }); autoResize(e.target); }}
               placeholder="説明を入力..."
-              rows={3}
               className="w-full text-base text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 resize-none outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+              style={{ maxHeight: '50vh', overflow: 'auto' }}
             />
           ) : (
             step.description && (
@@ -162,11 +172,12 @@ export function StepCard({
             <p className="text-sm text-gray-400 mb-1">ヒント</p>
             {editable || hintEditable ? (
               <textarea
+                ref={hintRef}
                 value={step.hint}
-                onChange={(e) => onUpdate({ hint: e.target.value })}
+                onChange={(e) => { onUpdate({ hint: e.target.value }); autoResize(e.target); }}
                 placeholder="補足情報..."
-                rows={3}
                 className="w-full text-base text-gray-600 bg-transparent resize-none outline-none"
+                style={{ maxHeight: '50vh', overflow: 'auto' }}
               />
             ) : (
               <p className="text-sm text-gray-600 whitespace-pre-wrap">{step.hint || '—'}</p>
@@ -236,9 +247,13 @@ function PhotoThumbnail({
       <div className="relative">
         {removeBtn}
         <button onClick={onClick} className={btnCls}>
-          <div className="relative bg-gray-900">
-            <video src={photo.url} className="block w-full h-auto" muted preload="metadata" playsInline />
-            <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative">
+            {photo.thumbnailUrl ? (
+              <img src={photo.thumbnailUrl} alt="" className="block w-full h-auto" />
+            ) : (
+              <video src={photo.url} className="block w-full h-auto" muted preload="metadata" playsInline />
+            )}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
               <div className="w-10 h-10 bg-white/80 rounded-full flex items-center justify-center">
                 <Play size={20} className="text-gray-800 ml-0.5" />
               </div>

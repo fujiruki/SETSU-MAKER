@@ -23,6 +23,7 @@ import { VideoTrimmer } from '../components/VideoTrimmer';
 import type { Note, Tag, Photo, Category } from '../models/types';
 import { noteRepo, categoryRepo, tagRepo } from '../repositories/ApiNoteRepository';
 import { resizeImage } from '../utils/imageResize';
+import { captureVideoThumbnail } from '../utils/videoThumbnail';
 
 export function NoteEditView() {
   const { noteId } = useParams();
@@ -47,6 +48,7 @@ export function NoteEditView() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [saveProgress, setSaveProgress] = useState<number | null>(null);
   const [showRevertConfirm, setShowRevertConfirm] = useState(false);
   const [lightboxPhoto, setLightboxPhoto] = useState<{ photo: Photo; stepId: string } | null>(null);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -76,6 +78,13 @@ export function NoteEditView() {
     window.addEventListener('click', close);
     return () => window.removeEventListener('click', close);
   }, []);
+
+  useEffect(() => {
+    if (saveProgress === null) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [saveProgress]);
 
   const getBreadcrumb = (categoryId: string): Category[] => {
     const path: Category[] = [];
@@ -113,50 +122,79 @@ export function NoteEditView() {
     return 'jpg';
   };
 
-  const uploadPhotos = async (photos: Photo[], noteId: string, stepId: string) => {
-    return Promise.all(
-      photos.map(async (photo) => {
-        if (!photo.url.startsWith('blob:')) return photo;
-        const res = await fetch(photo.url);
-        const blob = await res.blob();
-        const isVideo = photo.mediaType === 'video';
-        const ext = isVideo ? mimeToExt(blob.type) : 'jpg';
-        const file = new File([blob], `${photo.id}.${ext}`, { type: blob.type });
-        let thumbFile: File | undefined;
-        if (!isVideo) {
-          const thumbBlob = await resizeImage(blob, THUMBNAIL_MAX_SIZE);
-          if (thumbBlob !== blob) {
-            thumbFile = new File([thumbBlob], `${photo.id}_thumb.jpg`, { type: 'image/jpeg' });
-          }
+  const uploadPhotos = async (
+    photos: Photo[],
+    noteId: string,
+    stepId: string,
+    onProgress?: () => void,
+  ) => {
+    const results: Photo[] = [];
+    for (const photo of photos) {
+      if (!photo.url.startsWith('blob:')) {
+        results.push(photo);
+        onProgress?.();
+        continue;
+      }
+      const res = await fetch(photo.url);
+      const blob = await res.blob();
+      const isVideo = photo.mediaType === 'video';
+      const ext = isVideo ? mimeToExt(blob.type) : 'jpg';
+      const file = new File([blob], `${photo.id}.${ext}`, { type: blob.type });
+      let thumbFile: File | undefined;
+      if (isVideo) {
+        try {
+          const thumbBlob = await captureVideoThumbnail(blob, THUMBNAIL_MAX_SIZE);
+          thumbFile = new File([thumbBlob], `${photo.id}_thumb.jpg`, { type: 'image/jpeg' });
+        } catch { /* サムネイル生成失敗は無視 */ }
+      } else {
+        const thumbBlob = await resizeImage(blob, THUMBNAIL_MAX_SIZE);
+        if (thumbBlob !== blob) {
+          thumbFile = new File([thumbBlob], `${photo.id}_thumb.jpg`, { type: 'image/jpeg' });
         }
-        const result = await noteRepo.uploadPhoto(noteId, stepId, file, thumbFile);
-        return {
-          ...photo,
-          url: result.url,
-          thumbnailUrl: result.thumbnailUrl ?? undefined,
-          mediaType: photo.mediaType,
-          takenAt: result.takenAt ?? photo.takenAt,
-        };
-      })
-    );
+      }
+      const result = await noteRepo.uploadPhoto(noteId, stepId, file, thumbFile);
+      results.push({
+        ...photo,
+        url: result.url,
+        thumbnailUrl: result.thumbnailUrl ?? undefined,
+        mediaType: photo.mediaType,
+        takenAt: result.takenAt ?? photo.takenAt,
+      });
+      onProgress?.();
+    }
+    return results;
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const allPhotos = [
+        ...vm.draft.steps.flatMap((s) => s.photos),
+        ...vm.draft.unassignedPhotos,
+      ];
+      const totalCount = allPhotos.length;
+      let completedCount = 0;
+      if (totalCount > 0) setSaveProgress(0);
+
+      const onProgress = () => {
+        completedCount++;
+        setSaveProgress(totalCount > 0 ? completedCount / totalCount : 1);
+      };
+
       const effectiveId = noteId === 'new'
         ? (await noteRepo.create(vm.draft.categoryId || '', vm.draft.title)).id
         : vm.draft.id;
 
-      const uploadedSteps = await Promise.all(
-        vm.draft.steps.map(async (step) => ({
+      const uploadedSteps: typeof vm.draft.steps = [];
+      for (const step of vm.draft.steps) {
+        uploadedSteps.push({
           ...step,
-          photos: await uploadPhotos(step.photos, effectiveId, step.id),
-        }))
-      );
+          photos: await uploadPhotos(step.photos, effectiveId, step.id, onProgress),
+        });
+      }
 
       const uploadedUnassigned = await uploadPhotos(
-        vm.draft.unassignedPhotos, effectiveId, '__unassigned__'
+        vm.draft.unassignedPhotos, effectiveId, '__unassigned__', onProgress,
       );
 
       const noteToSave = {
@@ -172,12 +210,16 @@ export function NoteEditView() {
         navigate(`/notes/${effectiveId}/edit`, { replace: true });
       }
 
+      setSaveProgress(1);
+      setTimeout(() => setSaveProgress(null), 1500);
+
       const hhmm = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
       setSavedMessage(`保存しました ${hhmm}`);
       setTimeout(() => setSavedMessage(null), 4000);
     } catch (e) {
       console.error(e);
       setSavedMessage('保存に失敗しました');
+      setSaveProgress(null);
     }
     setIsSaving(false);
   };
@@ -409,6 +451,15 @@ export function NoteEditView() {
           </div>
         </div>
       </header>
+
+      {saveProgress !== null && (
+        <div className="sticky top-[49px] z-10 h-0.5 bg-gray-200">
+          <div
+            className={`h-full transition-all duration-300 ${saveProgress >= 1 ? 'bg-green-500' : 'bg-blue-500'}`}
+            style={{ width: `${Math.round(saveProgress * 100)}%` }}
+          />
+        </div>
+      )}
 
       {showRevertConfirm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
