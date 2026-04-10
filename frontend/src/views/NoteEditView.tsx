@@ -92,6 +92,19 @@ export function NoteEditView() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [saveProgress]);
 
+  useEffect(() => {
+    if (!lightboxPhoto) return;
+
+    const preventPinch = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
+
+    document.addEventListener('touchmove', preventPinch, { passive: false });
+    return () => {
+      document.removeEventListener('touchmove', preventPinch);
+    };
+  }, [lightboxPhoto]);
+
   const getBreadcrumb = (categoryId: string): Category[] => {
     const path: Category[] = [];
     let current = categories.find((c) => c.id === categoryId);
