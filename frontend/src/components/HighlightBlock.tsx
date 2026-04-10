@@ -39,13 +39,13 @@ export function HighlightBlock({ block, editable, onChange, onRemove }: Highligh
 
   return (
     <div className={`border-l-4 rounded-r-lg px-3 py-2 ${config.className} relative`}>
-      <div className={`flex items-center gap-1.5 text-xs font-bold mb-1 ${config.labelClassName}`}>
+      <div className={`flex items-center gap-1.5 text-sm font-bold mb-1 ${config.labelClassName}`}>
         {config.icon}
         {config.label}
         {editable && onRemove && (
           <button
             onClick={onRemove}
-            className="ml-auto text-gray-400 hover:text-gray-600 touch-manipulation"
+            className="ml-auto text-gray-400 hover:text-gray-600 touch-manipulation p-3 min-h-[48px] min-w-[48px] flex items-center justify-center"
           >
             <X size={14} />
           </button>
@@ -57,7 +57,8 @@ export function HighlightBlock({ block, editable, onChange, onRemove }: Highligh
           onChange={(e) => onChange?.(e.target.value)}
           placeholder="内容を入力..."
           rows={2}
-          className="w-full text-sm bg-transparent resize-none outline-none text-gray-700 placeholder-gray-400"
+          aria-label="ハイライト内容を入力"
+          className="w-full text-base bg-transparent resize-none outline-none text-gray-700 placeholder-gray-400"
         />
       ) : (
         <p className="text-sm text-gray-700 whitespace-pre-wrap">{block.content}</p>
@@ -78,7 +79,7 @@ export function AddHighlightButton({ onAdd }: AddHighlightButtonProps) {
           <button
             key={type}
             onClick={() => onAdd(type)}
-            className={`inline-flex items-center gap-1 text-xs px-2 py-1 border rounded-md ${cfg.className} ${cfg.labelClassName} touch-manipulation hover:opacity-80`}
+            className={`inline-flex items-center gap-1 text-sm px-3 py-2 border rounded-md ${cfg.className} ${cfg.labelClassName} touch-manipulation hover:opacity-80`}
           >
             {cfg.icon}
             {cfg.label}を追加

@@ -78,7 +78,7 @@ export function StepCard({
           <button
             {...attributes}
             {...listeners}
-            className="mt-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-manipulation shrink-0"
+            className="mt-1 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 touch-manipulation shrink-0 p-3 min-w-[48px] min-h-[48px] flex items-center justify-center"
           >
             <GripVertical size={20} />
           </button>
@@ -102,7 +102,7 @@ export function StepCard({
         {editable && (
           <button
             onClick={onRemove}
-            className="text-gray-300 hover:text-red-400 touch-manipulation shrink-0"
+            className="text-gray-300 hover:text-red-400 touch-manipulation shrink-0 p-3 min-w-[48px] min-h-[48px] flex items-center justify-center"
           >
             <Trash2 size={16} />
           </button>
@@ -110,11 +110,11 @@ export function StepCard({
       </div>
 
       {/* 中段: 左=画像 右=説明+ヒント */}
-      <div className="flex gap-3 p-3">
+      <div className="flex flex-col sm:flex-row gap-3 p-3">
         {/* 左列: 画像 */}
         <div
           ref={editable ? setPhotoDropRef : undefined}
-          className={`w-2/5 shrink-0 space-y-2 rounded-lg transition-colors ${
+          className={`sm:w-2/5 shrink-0 space-y-2 rounded-lg transition-colors ${
             editable && isPhotoDropOver ? 'bg-blue-50 ring-2 ring-blue-400' : ''
           }`}
         >
@@ -445,7 +445,7 @@ export function StepInsertButton({ onInsert }: StepInsertButtonProps) {
       <div className={`flex-1 border-t transition-colors ${hovered ? 'border-blue-300' : 'border-gray-200'}`} />
       <button
         onClick={onInsert}
-        className={`absolute left-1/2 -translate-x-1/2 flex items-center justify-center w-10 h-10 rounded border-2 bg-white transition-all touch-manipulation ${
+        className={`absolute left-1/2 -translate-x-1/2 flex items-center justify-center w-12 h-12 rounded border-2 bg-white transition-all touch-manipulation ${
           hovered
             ? 'border-blue-400 text-blue-500 shadow-sm scale-110'
             : 'border-gray-200 text-gray-300'

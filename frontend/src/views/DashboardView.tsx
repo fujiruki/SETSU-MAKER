@@ -56,7 +56,7 @@ export function DashboardView() {
         <Link to="/app" className="text-xl font-bold text-gray-800 tracking-tight hover:text-blue-600 transition-colors">
           SETSU-MAKER
         </Link>
-        <Link to="/" className="text-xs text-gray-400 hover:text-blue-500 transition-colors border border-gray-200 rounded px-2 py-0.5">
+        <Link to="/" className="text-xs text-gray-400 hover:text-blue-500 transition-colors border border-gray-200 rounded py-2 px-3">
           このアプリについて
         </Link>
         <div className="flex-1 relative max-w-md ml-4">
@@ -66,7 +66,7 @@ export function DashboardView() {
             placeholder="ノートを検索..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+            className="w-full pl-9 pr-3 py-2 text-base border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
           />
         </div>
         <Link
@@ -118,7 +118,7 @@ export function DashboardView() {
                     placeholder="タグを検索..."
                     value={tagSearchQuery}
                     onChange={(e) => setTagSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                    className="w-full pl-8 pr-3 py-1.5 text-base border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
                   />
                 </div>
                 {tags.length === 0 ? (
@@ -154,7 +154,7 @@ export function DashboardView() {
                       </span>
                       <button
                         onClick={() => setSelectedTagId(null)}
-                        className="text-gray-400 hover:text-gray-600 p-1 touch-manipulation"
+                        className="text-gray-400 hover:text-gray-600 p-3 min-w-[48px] min-h-[48px] flex items-center justify-center touch-manipulation"
                       >
                         <X size={14} />
                       </button>
@@ -166,10 +166,10 @@ export function DashboardView() {
                         placeholder="ノートを絞り込み..."
                         value={noteSearchQuery}
                         onChange={(e) => setNoteSearchQuery(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                        className="w-full pl-8 pr-3 py-1.5 text-base border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
                       />
                     </div>
-                    <span className="text-xs text-gray-400">{filteredNotes.length}件</span>
+                    <span className="text-sm text-gray-400">{filteredNotes.length}件</span>
                   </div>
                   <NoteGrid notes={filteredNotes} />
                 </div>
@@ -268,7 +268,7 @@ function NoteCard({ note }: { note: NoteListItem }) {
       </div>
       <div className="p-3">
         <p className="text-sm font-medium text-gray-800 line-clamp-2">{note.title}</p>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-sm text-gray-400 mt-1">
           {new Date(note.updatedAt).toLocaleDateString('ja-JP')}
         </p>
       </div>

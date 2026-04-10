@@ -449,7 +449,7 @@ export function NoteEditView() {
 
   return (
     <div className="min-h-dvh flex flex-col">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="flex items-center gap-2 px-4 py-2">
           <button
             onClick={() => {
@@ -474,7 +474,7 @@ export function NoteEditView() {
             <button
               onClick={vm.undo}
               disabled={!vm.canUndo}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 touch-manipulation disabled:opacity-30"
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 touch-manipulation disabled:opacity-30"
               title="元に戻す"
             >
               <Undo2 size={15} />
@@ -482,7 +482,7 @@ export function NoteEditView() {
             </button>
             <button
               onClick={() => bulkUploadRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 touch-manipulation"
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 touch-manipulation"
             >
               <Upload size={15} />
               <span className="hidden sm:inline">まとめて追加</span>
@@ -498,7 +498,7 @@ export function NoteEditView() {
             {vm.isDirty && (
               <button
                 onClick={() => setShowRevertConfirm(true)}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 touch-manipulation"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 touch-manipulation"
               >
                 <RotateCcw size={15} />
                 編集前に戻す
@@ -510,7 +510,7 @@ export function NoteEditView() {
             <button
               onClick={handleSave}
               disabled={isSaving || !vm.isDirty}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-40 hover:bg-blue-700 touch-manipulation font-medium"
+              className="flex items-center gap-1.5 px-4 py-2.5 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-40 hover:bg-blue-700 touch-manipulation font-medium"
             >
               <Save size={15} />
               {isSaving ? '保存中...' : '保存'}
@@ -521,7 +521,7 @@ export function NoteEditView() {
                   if (vm.isDirty && !confirm('保存されていない変更があります。破棄して閲覧モードに移動しますか？')) return;
                   navigate(`/notes/${noteId}`);
                 }}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 touch-manipulation"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2.5 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 touch-manipulation"
               >
                 <Eye size={15} />
                 閲覧モードに戻る
@@ -681,6 +681,23 @@ export function NoteEditView() {
             )}
           </DragOverlay>
         </DndContext>
+
+        <div className="sm:hidden h-20" />
+      </div>
+
+      {/* モバイル用固定フッター保存ボタン */}
+      <div
+        className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 z-40"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
+      >
+        <button
+          onClick={handleSave}
+          disabled={!vm.isDirty || isSaving}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl font-medium disabled:opacity-50 touch-manipulation"
+        >
+          <Save size={18} />
+          {isSaving ? '保存中...' : '保存'}
+        </button>
       </div>
 
       {/* 未割り当て写真の右クリックメニュー */}

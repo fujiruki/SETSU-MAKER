@@ -88,14 +88,14 @@ export function UnassignedDraggablePhoto({
         <>
           <button
             onClick={(e) => { e.stopPropagation(); onCreateStep(); }}
-            className="absolute top-1 right-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center touch-manipulation opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-1 right-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full w-12 h-12 flex items-center justify-center touch-manipulation opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
             title="新しい工程を作成"
           >
             <Plus size={16} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="absolute top-1 left-1 bg-black/50 hover:bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center touch-manipulation opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-1 left-1 bg-black/50 hover:bg-red-500 text-white rounded-full w-12 h-12 flex items-center justify-center touch-manipulation opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
             title="削除"
           >
             <X size={14} />

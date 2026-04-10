@@ -95,7 +95,7 @@ export function NoteView() {
 
   return (
     <div className="min-h-dvh flex flex-col">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="flex items-center gap-2 px-4 py-2">
           <Link to="/app" className="text-gray-400 hover:text-gray-600 touch-manipulation p-3 -ml-2">
             <ArrowLeft size={20} />
@@ -122,21 +122,21 @@ export function NoteView() {
               }`}
             >
               <BookOpen size={15} />
-              ヒント編集
+              <span className="hidden sm:inline">ヒント編集</span>
             </button>
             <button
               onClick={handleShare}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border touch-manipulation border-gray-200 hover:bg-gray-50 text-gray-600"
             >
               <Share2 size={15} />
-              共有
+              <span className="hidden sm:inline">共有</span>
             </button>
             <button
               onClick={() => navigate(`/notes/${noteId}/edit`, { state: { note } })}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border touch-manipulation border-gray-200 hover:bg-gray-50 text-gray-600"
             >
               <Edit2 size={15} />
-              編集
+              <span className="hidden sm:inline">編集</span>
             </button>
           </div>
         </div>
