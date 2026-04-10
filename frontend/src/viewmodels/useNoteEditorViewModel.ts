@@ -226,6 +226,64 @@ export function useNoteEditorViewModel(initialNote: Note) {
     [mutate]
   );
 
+  const movePhotoToStep = useCallback(
+    (photoId: string, fromStepId: string, toStepId: string) => {
+      if (fromStepId === toStepId) return;
+      mutate((n) => {
+        const fromStep = n.steps.find((s) => s.id === fromStepId);
+        const photo = fromStep?.photos.find((p) => p.id === photoId);
+        if (!photo) return n;
+        return {
+          ...n,
+          steps: n.steps.map((s) => {
+            if (s.id === fromStepId) return { ...s, photos: s.photos.filter((p) => p.id !== photoId) };
+            if (s.id === toStepId) return { ...s, photos: [...s.photos, photo] };
+            return s;
+          }),
+        };
+      });
+    },
+    [mutate]
+  );
+
+  const movePhotoToUnassigned = useCallback(
+    (photoId: string, fromStepId: string) =>
+      mutate((n) => {
+        const fromStep = n.steps.find((s) => s.id === fromStepId);
+        const photo = fromStep?.photos.find((p) => p.id === photoId);
+        if (!photo) return n;
+        const merged = [...n.unassignedPhotos, photo].sort((a, b) =>
+          (a.takenAt ?? a.createdAt).localeCompare(b.takenAt ?? b.createdAt)
+        );
+        return {
+          ...n,
+          steps: n.steps.map((s) =>
+            s.id === fromStepId ? { ...s, photos: s.photos.filter((p) => p.id !== photoId) } : s
+          ),
+          unassignedPhotos: merged,
+        };
+      }),
+    [mutate]
+  );
+
+  const reorderPhotosInStep = useCallback(
+    (stepId: string, draggedPhotoId: string, targetPhotoId: string) =>
+      mutate((n) => ({
+        ...n,
+        steps: n.steps.map((s) => {
+          if (s.id !== stepId) return s;
+          const photos = [...s.photos];
+          const fromIdx = photos.findIndex((p) => p.id === draggedPhotoId);
+          const toIdx = photos.findIndex((p) => p.id === targetPhotoId);
+          if (fromIdx === -1 || toIdx === -1) return s;
+          const [item] = photos.splice(fromIdx, 1);
+          photos.splice(toIdx, 0, item);
+          return { ...s, photos: photos.map((p, i) => ({ ...p, order: i })) };
+        }),
+      })),
+    [mutate]
+  );
+
   const createStepWithPhoto = useCallback(
     (photoId: string) =>
       mutate((n) => {
@@ -299,6 +357,9 @@ export function useNoteEditorViewModel(initialNote: Note) {
     removeUnassignedPhoto,
     assignPhotoToStep,
     createStepWithPhoto,
+    movePhotoToStep,
+    movePhotoToUnassigned,
+    reorderPhotosInStep,
     undo,
     resetDirty,
     reset,

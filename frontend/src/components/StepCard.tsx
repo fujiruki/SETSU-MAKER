@@ -1,8 +1,11 @@
-import { useRef, useState, useEffect, useCallback, type RefCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { GripVertical, Trash2, Plus, Camera, Upload, Clipboard, X, Play, Video, Scissors } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { HighlightBlock, AddHighlightButton } from './HighlightBlock';
+import { DraggablePhotoThumbnail } from './DraggablePhoto';
 import type { Step, HighlightType, Photo } from '../models/types';
 
 interface StepCardProps {
@@ -37,12 +40,20 @@ export function StepCard({
   onTrimVideo,
 }: StepCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: step.id });
+    useSortable({ id: `step:${step.id}` });
+
+  const photoIds = step.photos.map((p) => `photo:${p.id}:${step.id}`);
+  const { setNodeRef: setPhotoDropRef, isOver: isPhotoDropOver } = useDroppable({
+    id: `step-photos:${step.id}`,
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const videoCameraInputRef = useRef<HTMLInputElement>(null);
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+
+  const descRef = useRef<HTMLTextAreaElement>(null);
+  const hintRef = useRef<HTMLTextAreaElement>(null);
 
   const autoResize = useCallback((el: HTMLTextAreaElement | null) => {
     if (!el) return;
@@ -50,8 +61,8 @@ export function StepCard({
     el.style.height = el.scrollHeight + 'px';
   }, []);
 
-  const descRef = useCallback<RefCallback<HTMLTextAreaElement>>((el) => { autoResize(el); }, [autoResize]);
-  const hintRef = useCallback<RefCallback<HTMLTextAreaElement>>((el) => { autoResize(el); }, [autoResize]);
+  useEffect(() => { autoResize(descRef.current); }, [step.description, autoResize]);
+  useEffect(() => { autoResize(hintRef.current); }, [step.hint, autoResize]);
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -101,17 +112,36 @@ export function StepCard({
       {/* 中段: 左=画像 右=説明+ヒント */}
       <div className="flex gap-3 p-3">
         {/* 左列: 画像 */}
-        <div className="w-2/5 shrink-0 space-y-2">
-          {step.photos.map((photo) => (
-            <PhotoThumbnail
-              key={photo.id}
-              photo={photo}
-              editable={editable}
-              onClick={() => onPhotoClick(photo)}
-              onRemove={onRemovePhoto ? () => onRemovePhoto(photo.id) : undefined}
-              onTrim={editable && onTrimVideo ? () => onTrimVideo(photo) : undefined}
-            />
-          ))}
+        <div
+          ref={editable ? setPhotoDropRef : undefined}
+          className={`w-2/5 shrink-0 space-y-2 rounded-lg transition-colors ${
+            editable && isPhotoDropOver ? 'bg-blue-50 ring-2 ring-blue-400' : ''
+          }`}
+        >
+          <SortableContext items={photoIds} strategy={rectSortingStrategy}>
+            {step.photos.map((photo) => (
+              editable ? (
+                <DraggablePhotoThumbnail
+                  key={photo.id}
+                  photo={photo}
+                  stepId={step.id}
+                  editable={editable}
+                  onClick={() => onPhotoClick(photo)}
+                  onRemove={onRemovePhoto ? () => onRemovePhoto(photo.id) : undefined}
+                  onTrim={onTrimVideo ? () => onTrimVideo(photo) : undefined}
+                />
+              ) : (
+                <PhotoThumbnail
+                  key={photo.id}
+                  photo={photo}
+                  editable={editable}
+                  onClick={() => onPhotoClick(photo)}
+                  onRemove={onRemovePhoto ? () => onRemovePhoto(photo.id) : undefined}
+                  onTrim={editable && onTrimVideo ? () => onTrimVideo(photo) : undefined}
+                />
+              )
+            ))}
+          </SortableContext>
 
           {editable && (
             <>

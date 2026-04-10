@@ -388,4 +388,163 @@ describe('useNoteEditorViewModel', () => {
       expect(result.current.draft.unassignedPhotos.length).toBe(0);
     });
   });
+
+  describe('写真ドラッグ&ドロップ', () => {
+    const mkPhoto = (id: string, takenAt: string | null = null, order = 0): Photo => ({
+      id, url: `http://example.com/${id}.jpg`, annotations: [], cropRegion: null,
+      takenAt, createdAt: '2026-01-01T00:00:00Z', order,
+    });
+
+    describe('movePhotoToStep - 工程間の写真移動', () => {
+      it('工程Aから工程Bに写真が移動する', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1'), mkPhoto('p2', null, 1)] }),
+          makeStep({ id: 's2', order: 1, photos: [] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToStep('p1', 's1', 's2'));
+        expect(result.current.draft.steps[1].photos.map(p => p.id)).toContain('p1');
+      });
+
+      it('移動元の工程から写真が消える', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1'), mkPhoto('p2', null, 1)] }),
+          makeStep({ id: 's2', order: 1, photos: [] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToStep('p1', 's1', 's2'));
+        expect(result.current.draft.steps[0].photos.map(p => p.id)).not.toContain('p1');
+        expect(result.current.draft.steps[0].photos.length).toBe(1);
+      });
+
+      it('移動先の工程の末尾に追加される', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1')] }),
+          makeStep({ id: 's2', order: 1, photos: [mkPhoto('p2'), mkPhoto('p3', null, 1)] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToStep('p1', 's1', 's2'));
+        const s2Photos = result.current.draft.steps[1].photos;
+        expect(s2Photos[s2Photos.length - 1].id).toBe('p1');
+      });
+
+      it('fromとtoが同じ場合は何もしない', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1'), mkPhoto('p2', null, 1)] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToStep('p1', 's1', 's1'));
+        expect(result.current.isDirty).toBe(false);
+      });
+
+      it('isDirtyがtrueになる', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1')] }),
+          makeStep({ id: 's2', order: 1, photos: [] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToStep('p1', 's1', 's2'));
+        expect(result.current.isDirty).toBe(true);
+      });
+
+      it('undoで元に戻る', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1')] }),
+          makeStep({ id: 's2', order: 1, photos: [] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToStep('p1', 's1', 's2'));
+        act(() => result.current.undo());
+        expect(result.current.draft.steps[0].photos.map(p => p.id)).toContain('p1');
+        expect(result.current.draft.steps[1].photos.length).toBe(0);
+      });
+    });
+
+    describe('movePhotoToUnassigned - 工程から未割り当てプールへ戻す', () => {
+      it('工程から未割り当てプールに写真が戻る', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1', '2026-01-02T00:00:00Z')] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToUnassigned('p1', 's1'));
+        expect(result.current.draft.unassignedPhotos.map(p => p.id)).toContain('p1');
+      });
+
+      it('工程から写真が消える', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1'), mkPhoto('p2', null, 1)] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToUnassigned('p1', 's1'));
+        expect(result.current.draft.steps[0].photos.map(p => p.id)).not.toContain('p1');
+        expect(result.current.draft.steps[0].photos.length).toBe(1);
+      });
+
+      it('未割り当てプールにtakenAt順で追加される', () => {
+        const existing: Photo[] = [
+          mkPhoto('p-early', '2026-01-01T00:00:00Z'),
+          mkPhoto('p-late', '2026-01-03T00:00:00Z'),
+        ];
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p-mid', '2026-01-02T00:00:00Z')] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({
+          steps,
+          unassignedPhotos: existing,
+        })));
+        act(() => result.current.movePhotoToUnassigned('p-mid', 's1'));
+        expect(result.current.draft.unassignedPhotos.map(p => p.id)).toEqual(['p-early', 'p-mid', 'p-late']);
+      });
+
+      it('undoで元に戻る', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1', '2026-01-01T00:00:00Z')] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.movePhotoToUnassigned('p1', 's1'));
+        act(() => result.current.undo());
+        expect(result.current.draft.steps[0].photos.map(p => p.id)).toContain('p1');
+        expect(result.current.draft.unassignedPhotos.length).toBe(0);
+      });
+    });
+
+    describe('reorderPhotosInStep - 工程内の写真並び替え', () => {
+      it('工程内で写真の順序が変わる', () => {
+        const photos = [mkPhoto('p1', null, 0), mkPhoto('p2', null, 1), mkPhoto('p3', null, 2)];
+        const steps = [makeStep({ id: 's1', order: 0, photos })];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.reorderPhotosInStep('s1', 'p3', 'p1'));
+        const ids = result.current.draft.steps[0].photos.map(p => p.id);
+        expect(ids.indexOf('p3')).toBeLessThan(ids.indexOf('p1'));
+      });
+
+      it('orderが正しく振り直される', () => {
+        const photos = [mkPhoto('p1', null, 0), mkPhoto('p2', null, 1), mkPhoto('p3', null, 2)];
+        const steps = [makeStep({ id: 's1', order: 0, photos })];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.reorderPhotosInStep('s1', 'p3', 'p1'));
+        const orders = result.current.draft.steps[0].photos.map(p => p.order);
+        expect(orders).toEqual([0, 1, 2]);
+      });
+
+      it('他の工程には影響しない', () => {
+        const steps = [
+          makeStep({ id: 's1', order: 0, photos: [mkPhoto('p1', null, 0), mkPhoto('p2', null, 1)] }),
+          makeStep({ id: 's2', order: 1, photos: [mkPhoto('p3', null, 0), mkPhoto('p4', null, 1)] }),
+        ];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.reorderPhotosInStep('s1', 'p2', 'p1'));
+        expect(result.current.draft.steps[1].photos.map(p => p.id)).toEqual(['p3', 'p4']);
+      });
+
+      it('undoで元に戻る', () => {
+        const photos = [mkPhoto('p1', null, 0), mkPhoto('p2', null, 1), mkPhoto('p3', null, 2)];
+        const steps = [makeStep({ id: 's1', order: 0, photos })];
+        const { result } = renderHook(() => useNoteEditorViewModel(makeNote({ steps })));
+        act(() => result.current.reorderPhotosInStep('s1', 'p3', 'p1'));
+        act(() => result.current.undo());
+        expect(result.current.draft.steps[0].photos.map(p => p.id)).toEqual(['p1', 'p2', 'p3']);
+      });
+    });
+  });
 });

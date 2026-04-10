@@ -2,20 +2,26 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
+  type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
+  rectSortingStrategy,
 } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
 import { Save, Plus, Upload, ArrowLeft, RotateCcw, Undo2, Eye, FolderOpen, X, Image as ImageIcon } from 'lucide-react';
 import { ImageEditorLightbox } from '@fujiruki/react-image-editor-lightbox';
 import type { ImageEditorSaveResult } from '@fujiruki/react-image-editor-lightbox';
 import { StepCard, StepInsertButton } from '../components/StepCard';
+import { UnassignedDraggablePhoto } from '../components/DraggablePhoto';
 import { TagInput } from '../components/TagInput';
 import { EyecatchPickerModal } from '../components/EyecatchPickerModal';
 import { useNoteEditorViewModel } from '../viewmodels/useNoteEditorViewModel';
@@ -99,14 +105,74 @@ export function NoteEditView() {
   };
   const breadcrumb = getBreadcrumb(vm.draft.categoryId);
 
+  const [draggedPhoto, setDraggedPhoto] = useState<Photo | null>(null);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
   );
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const activeId = String(event.active.id);
+    if (activeId.startsWith('photo:')) {
+      const [, photoId, source] = activeId.split(':');
+      const photo = source === 'unassigned'
+        ? vm.draft.unassignedPhotos.find((p) => p.id === photoId)
+        : vm.draft.steps.find((s) => s.id === source)?.photos.find((p) => p.id === photoId);
+      setDraggedPhoto(photo ?? null);
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setDraggedPhoto(null);
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      vm.reorderSteps(String(active.id), String(over.id));
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    if (activeId.startsWith('step:') && overId.startsWith('step:')) {
+      const draggedStepId = activeId.slice(5);
+      const targetStepId = overId.slice(5);
+      if (draggedStepId !== targetStepId) {
+        vm.reorderSteps(draggedStepId, targetStepId);
+      }
+      return;
+    }
+
+    if (activeId.startsWith('photo:')) {
+      const [, photoId, fromSource] = activeId.split(':');
+
+      if (overId === 'unassigned-pool') {
+        if (fromSource !== 'unassigned') {
+          vm.movePhotoToUnassigned(photoId, fromSource);
+        }
+        return;
+      }
+
+      if (overId.startsWith('step-photos:')) {
+        const toStepId = overId.slice(12);
+        if (fromSource === 'unassigned') {
+          vm.assignPhotoToStep(photoId, toStepId);
+        } else if (fromSource !== toStepId) {
+          vm.movePhotoToStep(photoId, fromSource, toStepId);
+        }
+        return;
+      }
+
+      if (overId.startsWith('photo:')) {
+        const [, targetPhotoId, targetStepId] = overId.split(':');
+        if (fromSource === targetStepId) {
+          vm.reorderPhotosInStep(fromSource, photoId, targetPhotoId);
+        } else {
+          if (fromSource === 'unassigned') {
+            vm.assignPhotoToStep(photoId, targetStepId);
+          } else {
+            vm.movePhotoToStep(photoId, fromSource, targetStepId);
+          }
+        }
+        return;
+      }
     }
   };
 
@@ -529,9 +595,9 @@ export function NoteEditView() {
           </div>
         </div>
 
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <SortableContext
-            items={vm.draft.steps.map((s) => s.id)}
+            items={vm.draft.steps.map((s) => `step:${s.id}`)}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-0">
@@ -572,56 +638,36 @@ export function NoteEditView() {
               ))}
             </div>
           </SortableContext>
-        </DndContext>
 
-        <div className="flex justify-center mt-4">
-          <button
-            onClick={vm.addStep}
-            className="flex items-center gap-2 px-6 py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-blue-400 hover:text-blue-600 touch-manipulation font-medium"
-          >
-            <Plus size={18} />
-            工程を追加
-          </button>
-        </div>
-
-        {/* 未割り当て写真プール */}
-        {vm.draft.unassignedPhotos.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              未割り当ての写真 ({vm.draft.unassignedPhotos.length})
-            </h3>
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-              {vm.draft.unassignedPhotos.map((photo) => (
-                <div
-                  key={photo.id}
-                  className="relative group"
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setUnassignedContextMenu({ photo, x: e.clientX, y: e.clientY });
-                  }}
-                >
-                  <div className="aspect-square rounded-lg overflow-hidden border border-gray-200">
-                    <img src={photo.thumbnailUrl || photo.url} alt="" className="w-full h-full object-cover" />
-                  </div>
-                  <button
-                    onClick={() => vm.createStepWithPhoto(photo.id)}
-                    className="absolute top-1 right-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center touch-manipulation opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="新しい工程を作成"
-                  >
-                    <Plus size={16} />
-                  </button>
-                  <button
-                    onClick={() => vm.removeUnassignedPhoto(photo.id)}
-                    className="absolute top-1 left-1 bg-black/50 hover:bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center touch-manipulation opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="削除"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
+          <div className="flex justify-center mt-4">
+            <button
+              onClick={vm.addStep}
+              className="flex items-center gap-2 px-6 py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-blue-400 hover:text-blue-600 touch-manipulation font-medium"
+            >
+              <Plus size={18} />
+              工程を追加
+            </button>
           </div>
-        )}
+
+          <UnassignedPool
+            photos={vm.draft.unassignedPhotos}
+            onCreateStep={vm.createStepWithPhoto}
+            onRemove={vm.removeUnassignedPhoto}
+            onContextMenu={(photo, x, y) => setUnassignedContextMenu({ photo, x, y })}
+          />
+
+          <DragOverlay dropAnimation={null}>
+            {draggedPhoto && (
+              <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-blue-400 shadow-lg opacity-80">
+                <img
+                  src={draggedPhoto.thumbnailUrl || draggedPhoto.url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
       </div>
 
       {/* 未割り当て写真の右クリックメニュー */}
@@ -769,6 +815,63 @@ export function NoteEditView() {
             </button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function UnassignedPool({
+  photos,
+  onCreateStep,
+  onRemove,
+  onContextMenu,
+}: {
+  photos: Photo[];
+  onCreateStep: (photoId: string) => void;
+  onRemove: (photoId: string) => void;
+  onContextMenu: (photo: Photo, x: number, y: number) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'unassigned-pool' });
+  const photoIds = photos.map((p) => `photo:${p.id}:unassigned`);
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`mt-6 rounded-xl border-2 border-dashed p-4 transition-colors ${
+        isOver
+          ? 'border-blue-400 bg-blue-50'
+          : photos.length > 0
+            ? 'border-gray-300'
+            : 'border-gray-200'
+      }`}
+    >
+      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+        未割り当ての写真 ({photos.length})
+      </h3>
+      <SortableContext items={photoIds} strategy={rectSortingStrategy}>
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+          {photos.map((photo) => (
+            <div
+              key={photo.id}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onContextMenu(photo, e.clientX, e.clientY);
+              }}
+            >
+              <UnassignedDraggablePhoto
+                photo={photo}
+                editable
+                onCreateStep={() => onCreateStep(photo.id)}
+                onRemove={() => onRemove(photo.id)}
+              />
+            </div>
+          ))}
+        </div>
+      </SortableContext>
+      {photos.length === 0 && (
+        <p className="text-center text-sm text-gray-400 py-4">
+          写真をここにドロップして未割り当てに戻す
+        </p>
       )}
     </div>
   );
